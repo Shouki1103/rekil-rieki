@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>利益計算ツール</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#20242A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="利益計算">
+<link rel="apple-touch-icon" href="icon180.png">
+<link rel="icon" href="icon192.png">
+
+<style>
+  :root{
+    --ink:#20242A; --ink2:#3A424E;
+    --accent:#C1902F; --accent-d:#9E7527;      /* eBay=gold (default) */
+    --bg:#F2EEE7; --card:#FFFFFF; --panel:#F7F3EB;
+    --border:#E5DCCC; --border-strong:#D6C9B2;
+    --text:#282420; --muted:#877C6B;
+    --profit:#127A44; --minus:#C0453B;
+    --accent-soft:#F4E9D2; --accent-tintbg:#F5EFE3;
+  }
+  /* per-mode accent theming */
+  body[data-mode="ebay"]    { --accent:#C1902F; --accent-d:#9E7527; --accent-soft:#F4E9D2; --accent-tintbg:#F5EFE3; }
+  body[data-mode="catawiki"]{ --accent:#2E6BBF; --accent-d:#2256A0; --accent-soft:#DCE8F8; --accent-tintbg:#EEF4FC; }
+  body[data-mode="retail"]  { --accent:#1E8E55; --accent-d:#17673E; --accent-soft:#D9F0E2; --accent-tintbg:#EBF7F0; }
+  body[data-mode="wholesale"]{--accent:#7A4FB0; --accent-d:#5E3A8C; --accent-soft:#EADDF6; --accent-tintbg:#F4EEFB; }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;
+    color:var(--text); padding:0 0 env(safe-area-inset-bottom); -webkit-font-smoothing:antialiased;
+  }
+  .app{width:100%;max-width:520px;margin:0 auto;background:var(--card);overflow:hidden;}
+
+  .head{position:relative;background:linear-gradient(135deg,var(--ink) 0%,var(--ink2) 100%);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 18px 16px;}
+  .eyebrow{font-size:10.5px;letter-spacing:2.2px;font-weight:700;color:var(--accent);text-transform:uppercase;transition:color .2s;}
+  .head h1{margin:3px 0 10px;font-size:19px;font-weight:800;letter-spacing:.3px;}
+  .titlerow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
+  #lockLabel{font-size:23px;font-weight:800;color:var(--accent);display:none;white-space:nowrap;letter-spacing:.3px;}
+  body.locked #lockLabel{display:inline;}
+
+  /* 販路 tabs */
+  .modes{display:flex;gap:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:4px;}
+  .mode-btn{flex:1;border:0;background:transparent;color:#DED6C7;font-size:12px;font-weight:700;padding:9px 4px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s;font-family:inherit;}
+  .mode-btn.active{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18);}
+  .mode-desc{margin:10px 0 0;font-size:11px;line-height:1.5;color:#DED6C7;}
+
+  .fx{margin-top:12px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);border-radius:12px;padding:10px 12px;}
+  .fx-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
+  .fx-label{font-size:10.5px;color:#E7D9BE;font-weight:600;letter-spacing:.3px;}
+  .fx-rate{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;}
+  .fx-rate small{font-size:12px;font-weight:600;opacity:.85;}
+  .fx-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:7px;gap:8px;}
+  .fx-meta{font-size:10px;color:#D9CBB2;line-height:1.4;}
+  .fx-edit{display:flex;align-items:center;gap:6px;}
+  .fx-edit input{width:78px;padding:5px 7px;border-radius:7px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.95);color:var(--ink);font-weight:700;font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums;}
+  .fx-refresh{border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;border-radius:7px;padding:5px 8px;font-size:10.5px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .fx-refresh:hover{background:rgba(255,255,255,.28);}
+
+  .body{padding:15px 16px 18px;}
+  .field{margin-bottom:12px;}
+  label.lbl{display:block;font-size:11.5px;font-weight:700;color:#5A4F3C;margin-bottom:6px;}
+  .hint{font-size:10.5px;color:var(--muted);margin-top:5px;line-height:1.45;}
+
+  .inp,select.inp{width:100%;padding:11px 12px;border:1.5px solid var(--border-strong);border-radius:11px;background:var(--panel);font-size:16px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;transition:border-color .15s,box-shadow .15s;appearance:none;-webkit-appearance:none;}
+  .inp:focus,select.inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent);background:#fff;}
+  select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;padding-right:34px;cursor:pointer;}
+  .with-unit{position:relative;}
+  .with-unit .inp{padding-right:40px;}
+  .with-unit .unit{position:absolute;right:13px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:700;color:var(--muted);pointer-events:none;}
+  .with-unit.lead .inp{padding-left:34px;padding-right:13px;}
+  .with-unit.lead .unit{left:13px;right:auto;color:var(--accent-d);}
+  .row2{display:flex;gap:10px;}
+  .row2 .field{flex:1;}
+
+  .subcalc{margin-top:8px;display:flex;justify-content:space-between;gap:8px;background:var(--accent-tintbg);border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:11px;color:#6A5F4C;}
+  .subcalc b{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;}
+
+  .judge{margin:4px 0 12px;background:linear-gradient(135deg,var(--accent-d),var(--accent));color:#fff;border-radius:14px;padding:13px 15px;box-shadow:0 8px 20px rgba(0,0,0,.15);}
+  .judge-label{font-size:11.5px;letter-spacing:.2px;color:#fff;opacity:.92;font-weight:700;}
+  .judge-main{display:flex;align-items:baseline;justify-content:space-between;margin-top:2px;gap:8px;}
+  .judge-main .big{font-size:27px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;color:#fff;}
+  .judge-main .cap{font-size:11px;color:#fff;opacity:.9;text-align:right;line-height:1.35;font-weight:600;}
+  .judge-sub{display:flex;justify-content:space-between;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.28);font-size:11.5px;color:#fff;opacity:.95;}
+  .judge-sub b{color:#fff;font-weight:800;font-variant-numeric:tabular-nums;}
+
+  .verdict{margin:0 0 12px;border-radius:12px;padding:11px 13px;border:1.5px solid;display:flex;align-items:center;gap:10px;}
+  .verdict .v-icon{font-size:20px;line-height:1;}
+  .verdict .v-main{font-weight:800;font-size:14px;}
+  .verdict .v-sub{font-weight:600;font-size:11px;margin-top:2px;opacity:.9;}
+  .v-go{background:#E7F6EE;border-color:#9AD9B6;color:#127A44;}
+  .v-mid{background:#FEF6E4;border-color:#F0D28A;color:#9A6B12;}
+  .v-no{background:#FCEAE8;border-color:#F0B4AE;color:#C0453B;}
+  .v-none{background:var(--accent-tintbg);border-color:var(--border);color:#7A6E58;}
+  .warn{margin:0 0 12px;border-radius:11px;padding:10px 12px;background:#FCEAE8;border:1.5px solid #F0B4AE;color:#B23A2E;font-size:12px;font-weight:700;line-height:1.45;}
+
+  .disc{margin:2px 0 4px;border-top:1px dashed var(--border-strong);padding-top:6px;}
+  .disc summary{cursor:pointer;font-size:11.5px;font-weight:700;color:#5A4F3C;list-style:none;padding:6px 0;user-select:none;}
+  .disc summary::-webkit-details-marker{display:none;}
+  .disc summary::before{content:'▸';color:var(--accent-d);margin-right:6px;display:inline-block;transition:transform .15s;}
+  .disc[open] summary::before{transform:rotate(90deg);}
+
+  .results{margin-top:13px;border-top:1px dashed var(--border-strong);padding-top:13px;}
+  .result{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:4px 0;}
+  .result + .result{margin-top:8px;}
+  .r-title{font-size:12px;font-weight:700;color:#5A4F3C;}
+  .r-sub{font-size:11px;font-weight:700;margin-top:2px;}
+  .r-tag{display:inline-block;font-size:9.5px;font-weight:700;color:var(--accent-d);background:var(--accent-soft);border-radius:5px;padding:2px 6px;margin-left:6px;vertical-align:middle;}
+  .r-amount{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .pos{color:var(--profit);} .neg{color:var(--minus);}
+
+  .breakdown{margin-top:14px;background:var(--accent-tintbg);border:1px solid var(--border);border-radius:13px;padding:12px 14px;}
+  .bd-title{font-size:11px;font-weight:800;color:var(--ink);letter-spacing:.4px;margin-bottom:8px;}
+  .bd-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.05);}
+  .bd-row:last-child{border-bottom:none;}
+  .bd-row.sub{color:var(--muted);font-size:11px;}
+  .bd-label{color:#5C5140;}
+  .bd-right{display:flex;align-items:baseline;gap:8px;white-space:nowrap;}
+  .bd-val{font-weight:700;font-variant-numeric:tabular-nums;}
+  .bd-pct{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:38px;text-align:right;}
+  .bd-row.total{border-top:1.5px solid var(--border-strong);margin-top:4px;padding-top:9px;font-weight:800;color:var(--ink);}
+
+  .note{margin-top:13px;font-size:9.5px;line-height:1.6;color:#9A8E79;}
+  .note b{color:#7A6E58;}
+  [hidden]{display:none !important;}
+
+  /* 全販路（4面同時） */
+  .mbtn-all{flex:1;border:0;background:transparent;color:#DED6C7;font-size:12px;font-weight:700;padding:9px 4px;border-radius:9px;cursor:pointer;font-family:inherit;transition:background .15s,color .15s;}
+  .mbtn-all:hover{color:#fff;}
+  body.allmode .mbtn-all{background:var(--accent);color:#fff;}
+  #allView{position:fixed;inset:0;z-index:60;background:#C9BCA2;display:none;flex-direction:column;}
+  body.allmode #allView{display:flex;}
+  #allView .allbar{height:34px;flex:0 0 auto;background:#20242A;color:#fff;display:flex;align-items:center;gap:12px;padding:0 12px;font-size:12px;font-weight:700;}
+  #allView .alltitle{color:#E0BE7A;letter-spacing:.3px;}
+  #allView #allBack{margin-left:auto;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;}
+
+  #allGrid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(4,minmax(340px,1fr));gap:3px;background:#20242A;overflow-x:auto;overflow-y:hidden;}
+  #allGrid iframe{box-sizing:border-box;border:0;border-top:4px solid;width:100%;height:100%;background:#fff;display:block;}
+  #allGrid iframe:nth-child(1){border-top-color:#C1902F;}
+  #allGrid iframe:nth-child(2){border-top-color:#2E6BBF;}
+  #allGrid iframe:nth-child(3){border-top-color:#1E8E55;}
+  #allGrid iframe:nth-child(4){border-top-color:#7A4FB0;}
+</style>
+</head>
+<body data-mode="ebay">
+<div class="app">
+  <div class="head">
+    <div class="eyebrow" id="eyebrow">eBay Tool · USD · $500+</div>
+    <div class="titlerow"><h1 id="title">利益計算ツール</h1><span id="lockLabel"></span></div>
+
+    <div class="modes">
+      <button class="mode-btn active" data-m="ebay" type="button">eBay</button>
+      <button class="mode-btn" data-m="catawiki" type="button">Catawiki</button>
+      <button class="mode-btn" data-m="retail" type="button">小売</button>
+      <button class="mode-btn" data-m="wholesale" type="button">業販</button>
+      <button class="mbtn-all" id="allBtn" type="button">全販路</button>
+    </div>
+    <p class="mode-desc" id="modeDesc"></p>
+
+    <div class="fx" id="fxBar">
+      <div class="fx-top">
+        <span class="fx-label">本日の為替レート</span>
+        <span class="fx-rate"><small id="fxUnit">1 $&nbsp;=&nbsp;¥</small><span id="fxDisplay">—</span></span>
+      </div>
+      <div class="fx-bottom">
+        <span class="fx-meta" id="fxMeta">レート取得中…</span>
+        <span class="fx-edit">
+          <input id="rateInput" type="number" step="0.01" inputmode="decimal" aria-label="為替レート">
+          <button class="fx-refresh" id="refreshBtn" type="button">再取得</button>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- 仕入先 -->
+    <div class="field">
+      <label class="lbl" for="supplier" id="supplierLbl">仕入先</label>
+      <select id="supplier" class="inp">
+        <option value="" selected>選択してください</option>
+        <option value="ecoring_brand">エコリング【ブランド】</option>
+        <option value="ecoring_tool">エコリング【道具】</option>
+        <option value="aucnet">オークネット</option>
+        <option value="apre">アプレ／大吉【ブランド】</option>
+        <option value="penguin">ペンギン</option>
+        <option value="komehyo_std">コメ兵【時計・バッグ・小物】</option>
+        <option value="komehyo_apparel">コメ兵【アパレル】</option>
+        <option value="monobank">モノバンク／おたからや／タイムレス／JWA／リバオク【バッグ・時計】</option>
+        <option value="rebaoku_apparel">リバオク【アパレル】／大吉【アパレル】</option>
+        <option value="hamaya">浜屋</option>
+        <option value="jds">JDS</option>
+        <option value="jba">JBA</option>
+        <option value="prime">プライム</option>
+        <option value="trefac">トレファク</option>
+        <option value="sb_brand">スターバイヤーズ【時計・ジュエリー・バッグ】</option>
+        <option value="sb_small">スターバイヤーズ【アクセサリー・小物】</option>
+        <option value="sb_apparel">スターバイヤーズ【アパレル・靴・シルバー】</option>
+        <option value="other">その他</option>
+      </select>
+      <div class="hint" id="feeHint">仕入先を選ぶと手数料ルールが表示されます。</div>
+    </div>
+
+    <!-- 入札額 -->
+    <div class="field">
+      <label class="lbl" for="bid" id="bidLbl">入札額/仕入値(円)</label>
+      <div class="with-unit">
+        <input id="bid" class="inp" type="number" inputmode="numeric" placeholder="0">
+        <span class="unit">円</span>
+      </div>
+      <div class="subcalc">
+        <span>仕入先手数料 <b id="feeOut">¥0</b></span>
+        <span>仕入値（税込） <b id="costOut">¥0</b></span>
+      </div>
+    </div>
+
+    <!-- 販売先 (業販のみ) -->
+    <div class="field" id="sellerField" hidden>
+      <label class="lbl" for="seller">販売先</label>
+      <select id="seller" class="inp">
+        <option value="" selected>選択してください</option>
+        <option value="ecoring_brand">エコリング【ブランド】</option>
+        <option value="ecoring_tool">エコリング【道具】</option>
+        <option value="aucnet">オークネット</option>
+        <option value="jds">JDS</option>
+        <option value="prime">プライムオークション</option>
+        <option value="jba">JBA</option>
+        <option value="monobank">ものバンク</option>
+        <option value="hamaya">浜屋</option>
+        <option value="apre">アプレ</option>
+        <option value="jwa">JWA</option>
+        <option value="trefac">トレファク</option>
+        <option value="penguin">ペンギン</option>
+        <option value="sb_brand">スターバイヤーズ【時計・ジュエリー・バッグ・小物】</option>
+        <option value="sb_apparel">スターバイヤーズ【アパレル・靴・シルバー】</option>
+      </select>
+      <div class="hint" id="sellerHint">販売先を選ぶと販売手数料が表示されます（税抜→税込で反映）。</div>
+    </div>
+
+    <!-- 販売価格 -->
+    <div class="field">
+      <label class="lbl" for="price" id="priceLbl">予定販売価格（ドル・$500以上）</label>
+      <div class="with-unit lead" id="priceWrap">
+        <input id="price" class="inp" type="number" inputmode="decimal" placeholder="0">
+        <span class="unit" id="priceUnit">$</span>
+      </div>
+      <div class="hint" id="priceJpy">円換算 —</div>
+    </div>
+
+    <div class="warn" id="priceWarn" hidden>⚠ $500未満は対応していません。本ツールは販売価格 $500以上での仕入判断用です。</div>
+
+    <!-- 目標粗利 -->
+    <div class="field">
+      <label class="lbl" for="target" id="targetLbl">目標粗利（還付無・円）</label>
+      <div class="with-unit">
+        <input id="target" class="inp" type="number" inputmode="numeric" value="5000">
+        <span class="unit">円</span>
+      </div>
+    </div>
+
+    <!-- 仕入れ判断 -->
+    <div class="judge">
+      <div class="judge-label" id="judgeLabel">この金額まで仕入OK</div>
+      <div class="judge-main">
+        <span class="big" id="maxBid">—</span>
+        <span class="cap" id="maxBidCap">仕入先と販売価格を<br>入力してください</span>
+      </div>
+      <div class="judge-sub">
+        <span>損益分岐 <b id="breakEven">—</b></span>
+        <span>目標粗利 <b id="targetProfit">—</b></span>
+      </div>
+    </div>
+
+    <div class="verdict v-none" id="verdict">
+      <span class="v-icon" id="vIcon">◻</span>
+      <span>
+        <span class="v-main" id="vMain">金額を入力すると判定します</span>
+        <span class="v-sub" id="vSub"></span>
+      </span>
+    </div>
+
+    <!-- eBay/Catawiki 手数料設定 -->
+    <div id="ebayFees">
+      <div class="field">
+        <label class="lbl" for="fvf">成約手数料（%）</label>
+        <select id="fvf" class="inp">
+          <option value="13">13%</option>
+          <option value="18" selected>18%</option>
+        </select>
+        <div class="hint">既定18%。13%／18%で切替。選んだ値は保存され、次回もその値でスタートします。</div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="adfee">広告費（%）</label>
+        <div class="with-unit">
+          <input id="adfee" class="inp" type="number" inputmode="decimal" value="3">
+          <span class="unit">%</span>
+        </div>
+        <div class="hint">既定3%。変更すると保存され、次回もその値でスタートします。</div>
+      </div>
+    </div>
+
+    <!-- 小売 手数料設定 -->
+    <div id="retailFees" hidden>
+      <div class="row2">
+        <div class="field">
+          <label class="lbl" for="retailFvf">販売手数料（%）</label>
+          <div class="with-unit">
+            <input id="retailFvf" class="inp" type="number" inputmode="decimal" value="10">
+            <span class="unit">%</span>
+          </div>
+          <div class="hint">既定10%（変更可・保存）</div>
+        </div>
+        <div class="field">
+          <label class="lbl" for="retailShip">送料（円）</label>
+          <div class="with-unit">
+            <input id="retailShip" class="inp" type="number" inputmode="numeric" value="800">
+            <span class="unit">円</span>
+          </div>
+          <div class="hint">既定800円（変更可・保存）</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 送料設定 (eBay/Catawiki) -->
+    <details class="disc" id="shipDisc">
+      <summary>送料の設定を調整</summary>
+      <div class="row2" style="margin-top:8px;">
+        <div class="field" style="margin-bottom:2px;">
+          <label class="lbl" for="shipBuyer" id="shipBuyerLbl">送料（バイヤー負担・$）</label>
+          <div class="with-unit lead">
+            <input id="shipBuyer" class="inp" type="number" inputmode="decimal" value="0">
+            <span class="unit" id="shipBuyerUnit">$</span>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:2px;">
+          <label class="lbl" for="shipCost">送料 実費（円）</label>
+          <div class="with-unit">
+            <input id="shipCost" class="inp" type="number" inputmode="numeric" value="0">
+            <span class="unit">円</span>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <div class="results">
+      <div class="result">
+        <div>
+          <div class="r-title" id="profitNoTitle">利益（還付無）</div>
+          <div class="r-sub" id="marginNo">—</div>
+        </div>
+        <div class="r-amount pos" id="profitNo">¥0</div>
+      </div>
+      <div class="result" id="profitYesRow">
+        <div>
+          <div class="r-title">利益（還付有）<span class="r-tag">＋消費税還付</span></div>
+          <div class="r-sub" id="marginYes">—</div>
+        </div>
+        <div class="r-amount pos" id="profitYes">¥0</div>
+      </div>
+    </div>
+
+    <div class="breakdown">
+      <div class="bd-title">内訳（円）</div>
+      <div id="bdRows"></div>
+    </div>
+
+    <div class="note" id="note"></div>
+  </div>
+</div>
+
+<div id="allView">
+  <div class="allbar"><span class="alltitle">全販路（4面同時 · eBay／Catawiki／小売／業販）</span><button id="allBack" type="button">← 単体表示に戻る</button></div>
+  <div id="allGrid"></div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ---------------- 仕入先（買い側）ルール ---------------- */
+  /* 仕入値(税込) = 外税:(入札+手数料)×1.10 / 内税:(入札+手数料) */
+  var supplierRules = {
+    ecoring_brand:{ hint:'〜¥10,000 : 500円 ／ 〜¥49,999 : 1,000円 ／ 〜¥499,999 : 2,000円', fee:function(b){ if(b<=10000)return 500; if(b<=49999)return 1000; return 2000; }, taxIncluded:false },
+    ecoring_tool:{ hint:'入札額 × 10%（＋消費税10%）', fee:function(b){ return b*0.10; }, taxIncluded:false },
+    aucnet:{ hint:'入札額 × 4%', fee:function(b){ return b*0.04; }, taxIncluded:false },
+    apre:{ hint:'入札額 × 5%（大吉はブランド品）', fee:function(b){ return b*0.05; }, taxIncluded:false },
+    penguin:{ hint:'落札手数料 入札額 × 5%（＋消費税10%）', fee:function(b){ return b*0.05; }, taxIncluded:false },
+    komehyo_std:{ hint:'落札手数料 入札額 × 3%（落札額＋手数料に消費税10%）', fee:function(b){ return b*0.03; }, taxIncluded:false },
+    komehyo_apparel:{ hint:'アパレル落札手数料 〜1万:15% ／〜2万:10% ／2万超:5%（＋消費税10%）', fee:function(b){ if(b<=10000)return b*0.15; if(b<=20000)return b*0.10; return b*0.05; }, taxIncluded:false },
+    monobank:{ hint:'入札額 × 3%（リバオクはバッグ・時計）', fee:function(b){ return b*0.03; }, taxIncluded:false },
+    rebaoku_apparel:{ hint:'アパレル落札手数料 入札額 × 10%（＋消費税10%）※リバオク・大吉', fee:function(b){ return b*0.10; }, taxIncluded:false },
+    hamaya:{ hint:'入札額 × 3.3% ＋ 220円', fee:function(b){ return b*0.033 + 220; }, taxIncluded:false },
+    jds:{ hint:'入札額 × 10%（内税・消費税の上乗せ無し）', fee:function(b){ return b*0.10; }, taxIncluded:true },
+    jba:{ hint:'〜¥10,000 : 500円 ／ 〜¥99,999 : 5% ／ それ以上 : 2%', fee:function(b){ if(b<=10000)return 500; if(b<=99999)return b*0.05; return b*0.02; }, taxIncluded:false },
+    prime:{ hint:'入札額 × 8%', fee:function(b){ return b*0.08; }, taxIncluded:false },
+    trefac:{ hint:'〜¥199,999 : 5% ／ それ以上 : 1%', fee:function(b){ if(b<=199999)return b*0.05; return b*0.01; }, taxIncluded:false },
+    sb_brand:{ hint:'落札手数料 入札額 × 5%（＋消費税10%）＋参加費（税込）10万未満:1,100／50万未満:5,500／50万以上:11,000', rate:0.05, part:function(b){ return b<100000?1100:(b<500000?5500:11000); }, fee:function(b){ return b*0.05 + this.part(b)/1.1; }, taxIncluded:false },
+    sb_small:{ hint:'落札手数料 入札額 × 5%（＋消費税10%）＋参加費（税込）10万未満:1,100／10万以上:3,300', rate:0.05, part:function(b){ return b<100000?1100:3300; }, fee:function(b){ return b*0.05 + this.part(b)/1.1; }, taxIncluded:false },
+    sb_apparel:{ hint:'落札手数料 入札額 × 10%（＋消費税10%）＋参加費（税込）10万未満:1,100／10万以上:3,300', rate:0.10, part:function(b){ return b<100000?1100:3300; }, fee:function(b){ return b*0.10 + this.part(b)/1.1; }, taxIncluded:false },
+    other:{ hint:'入力額がそのまま仕入値（手数料・消費税の上乗せ無し／内税として計算)', fee:function(b){ return 0; }, taxIncluded:true }
+  };
+  var supplierShort={ecoring_brand:'エコリング ブランド',ecoring_tool:'エコリング 道具',aucnet:'オークネット',apre:'アプレ／大吉 ブランド',penguin:'ペンギン',komehyo_std:'コメ兵 時計/バッグ/小物',komehyo_apparel:'コメ兵 アパレル',monobank:'モノバンク他',rebaoku_apparel:'リバオク／大吉 アパレル',sb_brand:'スターバイヤーズ 時計/ジュエリー/バッグ',sb_small:'スターバイヤーズ アクセサリー/小物',sb_apparel:'スターバイヤーズ アパレル/靴/シルバー',hamaya:'浜屋',jds:'JDS',jba:'JBA',prime:'プライム',trefac:'トレファク',other:'その他'};
+
+  function purchaseCost(key,bid){
+    var r=supplierRules[key]; if(!r) return {fee:0,incl:0};
+    var fee=r.fee(bid); var base=bid+fee;
+    return {fee:fee, incl: r.taxIncluded?base:base*1.10};
+  }
+
+  /* ---------------- 販売先（業販・売り側）ルール ---------------- */
+  /* 手数料は税抜入力 → 最終税込(×1.10)。JDSのみ内税(×1.10しない)。photo=撮影/事務手数料(税抜) */
+  var sellerRules = {
+    ecoring_brand:{ label:'エコリング【ブランド】', hint:'〜1万:500 ／〜4.9万:1,000 ／5万〜:2,000（＋撮影400）', fee:function(p){ if(p<=10000)return 500; if(p<=49999)return 1000; return 2000; }, photo:400, taxIncluded:false },
+    ecoring_tool:{ label:'エコリング【道具】', hint:'売上 × 10%（＋撮影400）', fee:function(p){ return p*0.10; }, photo:400, taxIncluded:false },
+    aucnet:{ label:'オークネット', hint:'売上 × 3%（＋撮影300）', fee:function(p){ return p*0.03; }, photo:300, taxIncluded:false },
+    jds:{ label:'JDS', hint:'売上 × 10%（内税・落札金額に含まれる）', fee:function(p){ return p*0.10; }, photo:0, taxIncluded:true },
+    komehyo_watch:{ label:'コメ兵【時計】', hint:'〜2万:1,000円 ／2万超:0%（＋事務1,000）', fee:function(p){ return p<=20000?1000:0; }, photo:1000, taxIncluded:false },
+    komehyo_jewel:{ label:'コメ兵【宝石】', hint:'〜2万:1,000円 ／2万超:5%（＋事務1,000）', fee:function(p){ return p<=20000?1000:p*0.05; }, photo:1000, taxIncluded:false },
+    komehyo_bag:{ label:'コメ兵【バッグ】', hint:'〜2万:1,000円 ／2万超:5%（＋事務1,000）', fee:function(p){ return p<=20000?1000:p*0.05; }, photo:1000, taxIncluded:false },
+    komehyo_small:{ label:'コメ兵【小物】', hint:'〜2万:1,000円 ／2万超:5%（＋事務1,000）', fee:function(p){ return p<=20000?1000:p*0.05; }, photo:1000, taxIncluded:false },
+    komehyo_apparel:{ label:'コメ兵【アパレル】', hint:'〜2千:80%/〜3千:70%/〜4千:60%/〜5千:50%/〜6千:20%/6千超:5%（＋事務1,000）', fee:function(p){ if(p<=2000)return p*0.80; if(p<=3000)return p*0.70; if(p<=4000)return p*0.60; if(p<=5000)return p*0.50; if(p<=6000)return p*0.20; return p*0.05; }, photo:1000, taxIncluded:false },
+    prime:{ label:'プライムオークション', hint:'手数料無料', fee:function(p){ return 0; }, photo:0, taxIncluded:false },
+    jba:{ label:'JBA', hint:'売上 × 3%（＋撮影500）', fee:function(p){ return p*0.03; }, photo:500, taxIncluded:false },
+    monobank:{ label:'ものバンク', hint:'売上 × 5%（＋撮影500）', fee:function(p){ return p*0.05; }, photo:500, taxIncluded:false },
+    hamaya:{ label:'浜屋', hint:'売上 × 3.3% ＋ 400円', fee:function(p){ return p*0.033; }, photo:400, taxIncluded:false },
+    apre:{ label:'アプレ', hint:'〜1万:一律500円 ／1万超:3%', fee:function(p){ return p<=10000?500:p*0.03; }, photo:0, taxIncluded:false },
+    jwa:{ label:'JWA', hint:'30万未満:5% ／30万以上:3%', fee:function(p){ return p<300000?p*0.05:p*0.03; }, photo:0, taxIncluded:false },
+    trefac:{ label:'トレファク', hint:'〜3千:10%/〜1万:5%/〜20万:3%/20万超:1%', fee:function(p){ if(p<3000)return p*0.10; if(p<10000)return p*0.05; if(p<200000)return p*0.03; return p*0.01; }, photo:0, taxIncluded:false },
+    penguin:{ label:'ペンギン', hint:'撮影手数料 500円のみ', fee:function(p){ return 0; }, photo:500, taxIncluded:false },
+    sb_brand:{ label:'スターバイヤーズ【時計・ジュエリー・バッグ・小物】', hint:'売上 × 5%（＋消費税）＋出品手数料 1,100円（税込）', fee:function(p){ return p*0.05; }, photo:1000, photoLabel:'出品手数料', taxIncluded:false },
+    sb_apparel:{ label:'スターバイヤーズ【アパレル・靴・シルバー】', hint:'売上 × 10%（＋消費税）＋出品手数料 1,100円（税込）', fee:function(p){ return p*0.10; }, photo:1000, photoLabel:'出品手数料', taxIncluded:false }
+  };
+  function sellCost(key,price){
+    var r=sellerRules[key]; if(!r) return null;
+    var fee=r.fee(price); var photo=r.photo||0;
+    var feeIncl = r.taxIncluded ? fee : fee*1.10;   // 税抜→税込
+    var photoIncl = r.taxIncluded ? photo : photo*1.10;
+    return {rule:r, fee:fee, photo:photo, feeIncl:feeIncl, photoIncl:photoIncl, total:feeIncl+photoIncl};
+  }
+
+  /* ---------------- モード定義 ---------------- */
+  var MODES = {
+    ebay:     { cur:'USD', sym:'$', fx:true,  rebate:true,  seller:false, desc:'仕入先・入札額・販売価格($)を入れると、上限入札額と仕入判断(GO/NG)を即表示。手数料・消費税還付・為替を自動計算。', eyebrow:'eBay Tool · USD · $500+' },
+    catawiki: { cur:'EUR', sym:'€', fx:true,  rebate:true,  seller:false, desc:'Catawiki(ユーロ)向け。成約手数料一律12.5%・送料€27バイヤー負担・消費税還付・為替を自動計算。', eyebrow:'Catawiki Tool · EUR' },
+    retail:   { cur:'JPY', sym:'円',fx:false, rebate:false, seller:false, desc:'国内小売り向け。販売手数料10%(可変)・送料800円固定のみ。還付・為替なし。目標粗利5,000円で上限仕入額を表示。', eyebrow:'小売 · JPY' },
+    wholesale:{ cur:'JPY', sym:'円',fx:false, rebate:false, seller:true,  desc:'業者間販売。仕入先で仕入れ→販売先で売った時の粗利を表示。販売手数料は販売先別(税抜→税込)、送料なし。目標粗利5,000円で上限仕入額を表示。', eyebrow:'業販 · JPY' }
+  };
+  var mode='';   // 初回はsetModeで設定
+  // 販路ごとに入力値を独立保持（タブを切り替えても混ざらない）
+  var modeState={};
+  // ※ ツールを閉じる（パネル/ページを閉じる・再読込）と全てリセット。開いている間はタブごとに最後の入力を保持
+  var STATE_FIELDS=['supplier','bid','price','target','seller','shipBuyer','shipCost'];
+  var STATE_DEFAULT={target:'5000', shipCost:'0'};
+  function stateDefault(k,id){ if(id==='shipBuyer') return k==='catawiki'?'27':'0'; return STATE_DEFAULT[id]!=null?STATE_DEFAULT[id]:''; }
+  function stashState(k){ var o={}; STATE_FIELDS.forEach(function(id){ var el=$(id); if(el) o[id]=el.value; });
+    if(MODES[k]&&MODES[k].fx){ o._fx={rate:rate, manual:rateManual, input:$('rateInput').value, disp:$('fxDisplay').textContent, meta:$('fxMeta').textContent}; }
+    modeState[k]=o; }
+  // 仕入先・販売先は販路ごとに最後の選択を記憶（タブ移動・再読込でも残す）
+  function loadSel(k){ try{ return JSON.parse(localStorage.getItem('t_sel_'+k)||'{}')||{}; }catch(e){ return {}; } }
+  function saveSel(){ try{ localStorage.setItem('t_sel_'+mode, JSON.stringify({supplier:$('supplier').value, seller:$('seller').value})); }catch(e){} }
+  function restoreState(k){ var o=modeState[k]||{}; STATE_FIELDS.forEach(function(id){ var el=$(id); if(!el) return;
+    var v = o.hasOwnProperty(id) ? o[id] : stateDefault(k,id);
+    el.value=v; if((id==='supplier'||id==='seller') && el.value!==v) el.value=''; }); }
+
+  /* ---------------- FX ---------------- */
+  var FALLBACK={USD:158.00, EUR:178.00};
+  var rate=FALLBACK.USD, rateManual=false;
+  function curOf(){ return MODES[mode].cur; }
+  function loadRate(cur){ try{ var v=parseFloat(localStorage.getItem('t_rate_'+cur)); return (!isNaN(v)&&v>0)?v:null; }catch(e){ return null; } }
+  function saveRate(cur,v){ try{ localStorage.setItem('t_rate_'+cur, String(v)); }catch(e){} }
+
+  var FX_SOURCES = {
+    USD:[
+      {url:'https://api.frankfurter.dev/v1/latest?from=USD&to=JPY',parse:function(d){return d&&d.rates&&d.rates.JPY?{r:d.rates.JPY,note:'ECB基準 · '+(d.date||'')+' · 自動取得'}:null;}},
+      {url:'https://open.er-api.com/v6/latest/USD',parse:function(d){return d&&d.rates&&d.rates.JPY?{r:d.rates.JPY,note:'自動取得 · '+((d.time_last_update_utc||'').slice(0,16))}:null;}}
+    ],
+    EUR:[
+      {url:'https://api.frankfurter.dev/v1/latest?from=EUR&to=JPY',parse:function(d){return d&&d.rates&&d.rates.JPY?{r:d.rates.JPY,note:'ECB基準 · '+(d.date||'')+' · 自動取得'}:null;}},
+      {url:'https://open.er-api.com/v6/latest/EUR',parse:function(d){return d&&d.rates&&d.rates.JPY?{r:d.rates.JPY,note:'自動取得 · '+((d.time_last_update_utc||'').slice(0,16))}:null;}}
+    ]
+  };
+  function applyRate(r,meta,forCur){
+    if(forCur && forCur!==curOf()){ if(!loadRate(forCur)) saveRate(forCur, Math.round(r*100)/100); return; }   // 別の販路に移った後に届いた結果は表示に反映しない
+    if(rateManual) return;                                   // 手入力/保存レートを優先、自動取得で上書きしない
+    rate=r; $('fxDisplay').textContent=(Math.round(r*100)/100).toFixed(2);
+    $('rateInput').value=(Math.round(r*100)/100).toFixed(2);
+    saveRate(curOf(), Math.round(r*100)/100);                // 取得できたレートを記憶
+    $('fxMeta').textContent=meta; render();
+  }
+  function fetchRate(){
+    if(!MODES[mode].fx) return;
+    if(rateManual){ render(); return; }                      // 手入力レートがあるので取得不要
+    var cur=curOf(); $('fxMeta').textContent='レート取得中…';
+    var list=FX_SOURCES[cur]||[], i=0;
+    (function next(){
+      if(i>=list.length){
+        if(cur!==curOf()) return;
+        var keep=loadRate(cur)||FALLBACK[cur];
+        rate=keep; $('fxDisplay').textContent=keep.toFixed(2);
+        if(!$('rateInput').value) $('rateInput').value=keep.toFixed(2);
+        $('fxMeta').textContent='自動取得できません — 下の欄にレートを入力すれば次回も記憶します';
+        render(); return;
+      }
+      var s=list[i++];
+      fetch(s.url,{cache:'no-store'}).then(function(res){if(!res.ok)throw 0;return res.json();})
+        .then(function(d){var o=s.parse(d);if(!o)throw 0;applyRate(o.r,o.note,cur);})
+        .catch(function(){next();});
+    })();
+  }
+
+  /* ---------------- helpers ---------------- */
+  function yen(n){ return '¥' + (Math.trunc(n/100)*100).toLocaleString('ja-JP'); }   // 100円単位（上限入札額の判定用）
+  function yenExact(n){ return '¥' + Math.round(n).toLocaleString('ja-JP'); }          // 1円単位（金額の明細用）
+  function pct(n){ return (Math.round(n*1000)/10).toFixed(1) + '%'; }
+  function num(id){ var v=parseFloat($(id).value); return isNaN(v)?0:v; }
+  function signYen(n){ return n<0?'－'+yenExact(Math.abs(n)):yenExact(n); }
+  function roundUnit(n,unit){ n=Math.round(n); var base=Math.floor(n/unit)*unit, rem=n-base; return rem>unit/2 ? base+unit : base; }  // 端数が半分(unit/2)より大きいときだけ切上げ、ちょうど半分以下は切捨て
+  function headUnit(){ return $('supplier').value==='ecoring_tool' ? 100 : 1000; }     // エコリング道具は100円単位、他は1000円単位
+  function yenHead(n){ return '¥' + roundUnit(n,headUnit()).toLocaleString('ja-JP'); }  // 見出し金額（入札額/仕入値・販売額・上限入札額）
+  function row(label,val,p,cls){
+    return '<div class="bd-row '+(cls||'')+'"><span class="bd-label">'+label+'</span>'+
+      '<span class="bd-right"><span class="bd-val">'+val+'</span><span class="bd-pct">'+(p||'')+'</span></span></div>';
+  }
+  function setAmount(id,v){ var el=$(id); el.textContent=signYen(v); el.className='r-amount '+(v>=0?'pos':'neg'); }
+
+  /* ---------------- 計算（モード別） ---------------- */
+  function compute(bidVal){
+    var m=MODES[mode];
+    var key=$('supplier').value;
+    var pc=purchaseCost(key,bidVal);
+    var fee=pc.fee, purchaseInclTax=pc.incl;
+
+    // 販売額(円)
+    var priceJpy, priceInput=num('price');
+    if(m.cur==='JPY'){ priceJpy=priceInput; } else { priceJpy=priceInput*rate; }
+
+    var res={fee:fee,purchaseInclTax:purchaseInclTax,priceJpy:priceJpy,lines:[]};
+
+    if(mode==='ebay'){
+      var shipRev=num('shipBuyer')*rate, shipCost=num('shipCost');
+      var fvf=priceJpy*(num('fvf')/100), adfee=priceJpy*(num('adfee')/100);
+      var intl=priceJpy*0.015, net=priceJpy-fvf-adfee-intl, fx=net*0.02;
+      var refund=purchaseInclTax*(10/110)+(fvf+adfee+intl)*0.10;
+      var profitNo=priceJpy+shipRev-fvf-adfee-intl-fx-purchaseInclTax-shipCost;
+      res.shipRev=shipRev; res.shipCost=shipCost; res.fvf=fvf; res.adfee=adfee; res.intl=intl; res.fx=fx;
+      res.refund=refund; res.profitNo=profitNo; res.profitYes=profitNo+refund;
+    }
+    else if(mode==='catawiki'){
+      var shipRevC=num('shipBuyer')*rate, shipCostC=num('shipCost');
+      var feeC=priceJpy*0.125;
+      var refundC=purchaseInclTax*(10/110)+feeC*0.10;
+      var profitNoC=priceJpy+shipRevC-feeC-purchaseInclTax-shipCostC;
+      res.shipRev=shipRevC; res.shipCost=shipCostC; res.fvf=feeC;
+      res.refund=refundC; res.profitNo=profitNoC; res.profitYes=profitNoC+refundC;
+    }
+    else if(mode==='retail'){
+      var rfee=priceJpy*(num('retailFvf')/100), rship=num('retailShip');
+      var profitR=priceJpy-rfee-rship-purchaseInclTax;
+      res.rfee=rfee; res.rship=rship; res.profitNo=profitR; res.profitYes=profitR; res.refund=0;
+    }
+    else if(mode==='wholesale'){
+      var sc=sellCost($('seller').value,priceJpy);
+      var sellTotal=sc?sc.total:0;
+      var profitW=priceJpy-sellTotal-purchaseInclTax;
+      res.sc=sc; res.sellTotal=sellTotal; res.profitNo=profitW; res.profitYes=profitW; res.refund=0;
+    }
+    return res;
+  }
+  function profitNoAt(bidVal){ return compute(bidVal).profitNo; }
+
+  function maxBidForProfit(threshold){
+    var m=MODES[mode];
+    var priceJpy = (m.cur==='JPY') ? num('price') : num('price')*rate;
+    if(!$('supplier').value || priceJpy<=0) return null;
+    if(mode==='wholesale' && !$('seller').value) return null;
+    if(profitNoAt(0) < threshold) return 0;
+    var lo=0, hi=priceJpy*2+500000, g=0;
+    while(g<12 && profitNoAt(hi)>=threshold){ hi*=2; g++; }
+    for(var i=0;i<46;i++){ var mid=(lo+hi)/2; if(profitNoAt(mid)>=threshold) lo=mid; else hi=mid; }
+    return Math.floor(lo);
+  }
+
+  /* ---------------- render ---------------- */
+  function render(){
+    var m=MODES[mode];
+    var key=$('supplier').value, rule=supplierRules[key]||null;
+    $('feeHint').textContent = rule ? rule.hint : '仕入先を選ぶと手数料ルールが表示されます。';
+
+    if(mode==='wholesale'){
+      var sk=$('seller').value, sr=sellerRules[sk]||null;
+      $('sellerHint').textContent = sr ? sr.hint+'（税抜→税込で反映）' : '販売先を選ぶと販売手数料が表示されます（税抜→税込で反映）。';
+    }
+
+    var bid=num('bid');
+    var c=compute(bid);
+    var priceJpy=c.priceJpy;
+    var targetYen=num('target');
+
+    $('feeOut').textContent=yenExact(c.fee);
+    $('costOut').textContent=yenHead(c.purchaseInclTax);
+
+    if(m.cur==='JPY'){
+      $('priceJpy').textContent = priceJpy>0 ? ('販売額 '+yenHead(priceJpy)) : '販売額 —';
+    } else {
+      $('priceJpy').textContent = num('price')>0 ? ('円換算 '+yenHead(priceJpy)+(c.shipRev?('（送料収入 '+yenExact(c.shipRev)+'）'):'')) : '円換算 —';
+    }
+    var pv=num('price'); $('priceWarn').hidden=!(mode==='ebay' && pv>0 && pv<500);
+
+    // 判定
+    var ceiling=maxBidForProfit(targetYen);
+    var breakeven=maxBidForProfit(0);
+    if(ceiling===null){
+      $('maxBid').textContent='—';
+      $('maxBidCap').innerHTML = (mode==='wholesale')?'仕入先・販売先・販売額を<br>入力してください':'仕入先と販売価格を<br>入力してください';
+      $('breakEven').textContent='—'; $('targetProfit').textContent='—';
+    }else{
+      $('maxBid').textContent=yenHead(ceiling);
+      $('maxBidCap').innerHTML='粗利<br>'+yenExact(targetYen)+'以上';
+      $('breakEven').textContent=yenExact(breakeven);
+      $('targetProfit').textContent=yenExact(targetYen);
+    }
+
+    // verdict
+    var v=$('verdict'),vIcon=$('vIcon'),vMain=$('vMain'),vSub=$('vSub');
+    var yesLabel = m.rebate ? '還付込利益 ' : '利益 ';
+    if(ceiling===null || bid<=0){
+      v.className='verdict v-none'; vIcon.textContent='◻';
+      vMain.textContent = ceiling===null ? '必要項目を入力' : '入札額/仕入値を入力すると判定します';
+      vSub.innerHTML='';
+    }else if(bid<=ceiling){
+      v.className='verdict v-go'; vIcon.textContent='🟢';
+      vMain.textContent='仕入対象商品';
+      vSub.innerHTML='あと '+yenExact(ceiling-bid)+' まで入札余地<br>'+yesLabel+signYen(c.profitYes);
+    }else if(bid<=breakeven){
+      v.className='verdict v-mid'; vIcon.textContent='🟡';
+      vMain.textContent='薄利（目標粗利に未達）';
+      vSub.innerHTML='目標粗利まで '+yenExact(targetYen-c.profitNo)+' 不足<br>粗利 '+signYen(c.profitNo);
+    }else{
+      v.className='verdict v-no'; vIcon.textContent='🔴';
+      vMain.textContent='見送り（このままだと赤字）';
+      vSub.innerHTML='損益分岐は '+yenExact(breakeven)+'<br>粗利 '+signYen(c.profitNo);
+    }
+
+    // results
+    setAmount('profitNo',c.profitNo);
+    $('marginNo').textContent = priceJpy>0?pct(c.profitNo/priceJpy):'—';
+    $('marginNo').className='r-sub '+(c.profitNo>=0?'pos':'neg');
+    if(m.rebate){
+      $('profitYesRow').hidden=false;
+      setAmount('profitYes',c.profitYes);
+      $('marginYes').textContent = priceJpy>0?pct(c.profitYes/priceJpy):'—';
+      $('marginYes').className='r-sub '+(c.profitYes>=0?'pos':'neg');
+      $('profitNoTitle').textContent='利益（還付無）';
+    }else{
+      $('profitYesRow').hidden=true;
+      $('profitNoTitle').textContent='粗利';
+    }
+
+    // breakdown
+    var base=priceJpy, rows=[];
+    rows.push(row(m.cur==='JPY'?'販売額（円）':'予定販売価格（円）', yenExact(priceJpy), '', ''));
+    if(mode==='ebay'){
+      rows.push(row('送料収入（バイヤー '+m.sym+(Math.round(num('shipBuyer')*100)/100)+'）','＋'+yenExact(c.shipRev),base>0?pct(c.shipRev/base):'',''));
+      rows.push(row('成約手数料（'+num('fvf')+'%）','－'+yenExact(c.fvf),base>0?pct(c.fvf/base):'',''));
+      rows.push(row('広告費（'+num('adfee')+'%）','－'+yenExact(c.adfee),base>0?pct(c.adfee/base):'',''));
+      rows.push(row('海外決済手数料（1.5%）','－'+yenExact(c.intl),base>0?pct(c.intl/base):'',''));
+      rows.push(row('為替手数料（2%）','－'+yenExact(c.fx),base>0?pct(c.fx/base):'',''));
+    }else if(mode==='catawiki'){
+      rows.push(row('送料収入（バイヤー '+m.sym+(Math.round(num('shipBuyer')*100)/100)+'）','＋'+yenExact(c.shipRev),base>0?pct(c.shipRev/base):'',''));
+      rows.push(row('成約手数料（12.5%）','－'+yenExact(c.fvf),base>0?pct(c.fvf/base):'',''));
+    }else if(mode==='retail'){
+      rows.push(row('販売手数料（'+num('retailFvf')+'%）','－'+yenExact(c.rfee),base>0?pct(c.rfee/base):'',''));
+      rows.push(row('送料','－'+yenExact(c.rship),base>0?pct(c.rship/base):'',''));
+    }else if(mode==='wholesale'){
+      if(c.sc){
+        rows.push(row('販売手数料（税込・'+c.sc.rule.label+'）','－'+yenExact(c.sc.feeIncl),base>0?pct(c.sc.feeIncl/base):'',''));
+        if(c.sc.photoIncl>0) rows.push(row((c.sc.rule.photoLabel||'撮影／事務手数料')+'（税込）','－'+yenExact(c.sc.photoIncl),base>0?pct(c.sc.photoIncl/base):'',''));
+      }else{
+        rows.push(row('販売手数料','販売先を選択','',''));
+      }
+    }
+    if(c.fee>0) rows.push(row('仕入先手数料'+(rule?'（'+supplierShort[key]+'）':''),'（'+yenExact(c.fee)+'）','','sub'));
+    if(rule && rule.part) rows.push(row('└ うち参加費（税込）','（'+yenExact(rule.part(num('bid')))+'）','','sub'));
+    rows.push(row(key==='other'?'仕入値（入力額）':'入札額＋手数料（税込）','－'+yenExact(c.purchaseInclTax),base>0?pct(c.purchaseInclTax/base):'',''));
+    if(mode==='ebay' && num('shipCost')>0) rows.push(row('送料 実費','－'+yenExact(num('shipCost')),base>0?pct(num('shipCost')/base):'',''));
+    rows.push(row(m.rebate?'利益（還付無）':'粗利',signYen(c.profitNo),'','total'));
+    if(m.rebate){
+      rows.push(row('消費税還付','＋'+yenExact(c.refund),base>0?pct(c.refund/base):'',''));
+      rows.push(row('利益（還付有）',signYen(c.profitYes),'','total'));
+    }
+    $('bdRows').innerHTML=rows.join('');
+  }
+
+  /* ---------------- モード切替 ---------------- */
+  var NOTES={
+    ebay:'※ 本ツールは販売価格 $500以上での仕入判断用です（$500未満は仕入れない前提・関税0）<br>※ 成約手数料（13%／18%・既定18%）／広告費（既定3%）／海外決済1.5%／為替2%<br>※ 仕入値＝（入札額＋仕入先手数料）×1.10（JDS・その他は内税）<br>※ 消費税還付＝仕入値×10/110 ＋（成約＋広告＋海外決済）×10%<br>※ 上限入札額＝還付無の粗利が目標粗利以上になる最大入札額',
+    catawiki:'※ ユーロ建て。成約手数料一律12.5%・送料€27バイヤー負担（可変）<br>※ 仕入値＝（入札額＋仕入先手数料）×1.10（JDS・その他は内税）<br>※ 消費税還付＝仕入値×10/110 ＋ 成約手数料×10%<br>※ 上限入札額＝還付無の粗利が目標粗利以上になる最大入札額',
+    retail:'※ 国内小売り。販売手数料（既定10%・変更可）＋送料（既定800円・変更可）のみ。その他手数料・還付・為替なし<br>※ 仕入値＝（入札額＋仕入先手数料）×1.10（JDS・その他は内税）<br>※ 上限仕入額＝粗利が目標粗利（5,000円）以上になる最大仕入額',
+    wholesale:'※ 業者間販売。販売手数料は販売先別（税抜入力→税込×1.10で反映／JDSは内税）。送料なし・還付なし<br>※ 仕入値＝（入札額＋仕入先手数料）×1.10（JDS・その他は内税／コメ兵アパレルは金額別15/10/5%）<br>※ 上限仕入額＝粗利が目標粗利（5,000円）以上になる最大仕入額'
+  };
+  function setMode(mkey){
+    if(mode) stashState(mode);   // 直前の販路の入力値を退避（同じタブを押し直しても消えない）
+    mode=mkey; var m=MODES[mkey];
+    document.body.setAttribute('data-mode',mkey);
+    Array.prototype.forEach.call(document.querySelectorAll('.mode-btn'),function(b){ b.classList.toggle('active', b.getAttribute('data-m')===mkey); });
+    $('eyebrow').textContent=m.eyebrow;
+    $('modeDesc').innerHTML=m.desc;
+    $('lockLabel').textContent=({ebay:'eBay',catawiki:'Catawiki',retail:'小売',wholesale:'業販'})[mkey]||'';
+    $('note').innerHTML=NOTES[mkey];
+
+    // FX bar
+    $('fxBar').hidden=!m.fx;
+    if(m.fx){ $('fxUnit').innerHTML='1 '+m.sym+'&nbsp;=&nbsp;¥'; }
+
+    // 販売先
+    $('sellerField').hidden=!m.seller;
+
+    // 販売価格ラベル/単位
+    if(m.cur==='JPY'){
+      $('priceLbl').textContent='販売額（円）';
+      $('priceUnit').textContent='円'; $('priceWrap').classList.remove('lead');
+    }else{
+      $('priceLbl').textContent='予定販売価格（'+(m.cur==='USD'?'ドル・$500以上':'ユーロ')+'）';
+      $('priceUnit').textContent=m.sym; $('priceWrap').classList.add('lead');
+    }
+
+    // 入札ラベル
+    $('bidLbl').textContent = (mkey==='wholesale')?'仕入額（落札・円）':'入札額/仕入値(円)';
+
+    // 目標粗利ラベル
+    $('targetLbl').textContent = m.rebate?'目標粗利（還付無・円）':'目標粗利（円）';
+
+    // 手数料パネル表示
+    $('ebayFees').hidden = !(mkey==='ebay');
+    $('retailFees').hidden = !(mkey==='retail');
+    // Catawiki/業販は追加手数料パネルなし
+
+    // 送料設定(eBay/Catawikiのみ)
+    $('shipDisc').hidden = !(m.fx);
+    if(m.fx){ $('shipBuyerLbl').textContent='送料（バイヤー負担・'+m.sym+'）'; $('shipBuyerUnit').textContent=m.sym; }
+    // Catawiki既定送料€27
+    // 送料はタブごとに保持（restoreStateで復元・初回はeBay $0／Catawiki €27）
+
+    // FX取得（保存レート→即表示→自動取得で上書き）
+    var _fx=(modeState[mkey]||{})._fx;
+    if(m.fx && _fx){
+      // 一度開いた販路に戻った時は、離れた時のレートのまま（再取得しない＝数値が変わらない）
+      rateManual=_fx.manual; rate=_fx.rate; $('rateInput').value=_fx.input; $('fxDisplay').textContent=_fx.disp; $('fxMeta').textContent=_fx.meta;
+    }else if(m.fx){
+      rateManual=false;
+      var start=loadRate(m.cur)||FALLBACK[m.cur];
+      rate=start; $('rateInput').value=start.toFixed(2); $('fxDisplay').textContent=start.toFixed(2);
+      $('fxMeta').textContent=loadRate(m.cur)?'前回のレート（再取得で更新）':'レート取得中…';
+      fetchRate();
+    }
+    restoreState(mkey);                                        // この販路の入力値を復元（無ければ空＝独立）
+    render();
+  }
+
+  /* ---------------- persistence ---------------- */
+  function loadPrefs(){
+    try{
+      var g=function(k){return localStorage.getItem(k);};
+      if(g('t_fvf')==='13'||g('t_fvf')==='18') $('fvf').value=g('t_fvf');   // 旧14%等の保存値は無視して既定18%
+      if(g('t_adfee')!=null) $('adfee').value=g('t_adfee');
+      if(g('t_retailFvf')!=null) $('retailFvf').value=g('t_retailFvf');
+      if(g('t_retailShip')!=null) $('retailShip').value=g('t_retailShip');
+    }catch(e){}
+  }
+  function savePrefs(){
+    try{
+      localStorage.setItem('t_fvf',$('fvf').value);
+      localStorage.setItem('t_adfee',$('adfee').value);
+      localStorage.setItem('t_retailFvf',$('retailFvf').value);
+      localStorage.setItem('t_retailShip',$('retailShip').value);
+    }catch(e){}
+  }
+
+  /* ---------------- events ---------------- */
+  Array.prototype.forEach.call(document.querySelectorAll('.mode-btn'),function(b){
+    b.addEventListener('click',function(){ setMode(b.getAttribute('data-m')); });
+  });
+  ['supplier','seller','bid','price','target','fvf','adfee','retailFvf','retailShip','shipBuyer','shipCost'].forEach(function(id){
+    var el=$(id); if(!el) return;
+    el.addEventListener('input',function(e){
+      if(id==='shipBuyer') $('shipBuyer').dataset.touched='1';
+      render();
+      if(id==='fvf'||id==='adfee'||id==='retailFvf'||id==='retailShip') savePrefs();
+    });
+    el.addEventListener('change',function(){ render(); if(id==='supplier'||id==='seller') saveSel(); });
+    if(id==='supplier'||id==='seller') el.addEventListener('input',saveSel);
+  });
+  // 数値欄：マウスホイールで値が増減しないようにする（ページはそのままスクロール）
+  Array.prototype.forEach.call(document.querySelectorAll('input[type=number]'),function(el){
+    el.addEventListener('wheel',function(){ if(document.activeElement===el) el.blur(); },{passive:true});
+  });
+  $('rateInput').addEventListener('input',function(){
+    var v=parseFloat($('rateInput').value);
+    if(!isNaN(v)&&v>0){ rateManual=true; rate=v; saveRate(curOf(), Math.round(v*100)/100); $('fxDisplay').textContent=(Math.round(v*100)/100).toFixed(2); $('fxMeta').textContent='手入力レート（保存しました）'; render(); }
+  });
+  $('refreshBtn').addEventListener('click',function(){ rateManual=false; fetchRate(); });
+
+  // init（固定モード：ビルド時トークン、または URLハッシュ #ebay 等。あればタブを隠す）
+  loadPrefs();
+  var LOCK='@@MODE@@'; if(LOCK.charAt(0)==='@') LOCK='';
+  try{ var _h=(location.hash||location.search||''); var _mm=_h.match(/(ebay|catawiki|retail|wholesale)/); if(_mm) LOCK=_mm[1]; }catch(e){}
+  if(LOCK){ document.body.classList.add('locked'); var _mb=document.querySelector('.modes'); if(_mb) _mb.style.display='none'; }
+  setMode(LOCK||'ebay');
+})();
+</script>
+<script>
+(function(){
+  var SELF_SRC = "<!doctype html>\n<html lang=\"ja\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>\u5229\u76ca\u8a08\u7b97\u30c4\u30fc\u30eb<\/title>\n<style>\n  :root{\n    --ink:#20242A; --ink2:#3A424E;\n    --accent:#C1902F; --accent-d:#9E7527;      /* eBay=gold (default) */\n    --bg:#F2EEE7; --card:#FFFFFF; --panel:#F7F3EB;\n    --border:#E5DCCC; --border-strong:#D6C9B2;\n    --text:#282420; --muted:#877C6B;\n    --profit:#127A44; --minus:#C0453B;\n    --accent-soft:#F4E9D2; --accent-tintbg:#F5EFE3;\n  }\n  /* per-mode accent theming */\n  body[data-mode=\"ebay\"]    { --accent:#C1902F; --accent-d:#9E7527; --accent-soft:#F4E9D2; --accent-tintbg:#F5EFE3; }\n  body[data-mode=\"catawiki\"]{ --accent:#2E6BBF; --accent-d:#2256A0; --accent-soft:#DCE8F8; --accent-tintbg:#EEF4FC; }\n  body[data-mode=\"retail\"]  { --accent:#1E8E55; --accent-d:#17673E; --accent-soft:#D9F0E2; --accent-tintbg:#EBF7F0; }\n  body[data-mode=\"wholesale\"]{--accent:#7A4FB0; --accent-d:#5E3A8C; --accent-soft:#EADDF6; --accent-tintbg:#F4EEFB; }\n\n  *{box-sizing:border-box}\n  html,body{margin:0;background:var(--bg);}\n  body{\n    font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Hiragino Sans\",\"Hiragino Kaku Gothic ProN\",\"Noto Sans JP\",\"Yu Gothic\",Meiryo,sans-serif;\n    color:var(--text); padding:0 0 env(safe-area-inset-bottom); -webkit-font-smoothing:antialiased;\n  }\n  .app{width:100%;max-width:520px;margin:0 auto;background:var(--card);overflow:hidden;}\n\n  .head{position:relative;background:linear-gradient(135deg,var(--ink) 0%,var(--ink2) 100%);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 18px 16px;}\n  .eyebrow{font-size:10.5px;letter-spacing:2.2px;font-weight:700;color:var(--accent);text-transform:uppercase;transition:color .2s;}\n  .head h1{margin:3px 0 10px;font-size:19px;font-weight:800;letter-spacing:.3px;}\n  .titlerow{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}\n  #lockLabel{font-size:23px;font-weight:800;color:var(--accent);display:none;white-space:nowrap;letter-spacing:.3px;}\n  body.locked #lockLabel{display:inline;}\n\n  /* \u8ca9\u8def tabs */\n  .modes{display:flex;gap:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:4px;}\n  .mode-btn{flex:1;border:0;background:transparent;color:#DED6C7;font-size:12px;font-weight:700;padding:9px 4px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s;font-family:inherit;}\n  .mode-btn.active{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.18);}\n  .mode-desc{margin:10px 0 0;font-size:11px;line-height:1.5;color:#DED6C7;}\n\n  .fx{margin-top:12px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.20);border-radius:12px;padding:10px 12px;}\n  .fx-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}\n  .fx-label{font-size:10.5px;color:#E7D9BE;font-weight:600;letter-spacing:.3px;}\n  .fx-rate{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;}\n  .fx-rate small{font-size:12px;font-weight:600;opacity:.85;}\n  .fx-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:7px;gap:8px;}\n  .fx-meta{font-size:10px;color:#D9CBB2;line-height:1.4;}\n  .fx-edit{display:flex;align-items:center;gap:6px;}\n  .fx-edit input{width:78px;padding:5px 7px;border-radius:7px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.95);color:var(--ink);font-weight:700;font-size:12.5px;text-align:right;font-variant-numeric:tabular-nums;}\n  .fx-refresh{border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.15);color:#fff;border-radius:7px;padding:5px 8px;font-size:10.5px;font-weight:600;cursor:pointer;white-space:nowrap;}\n  .fx-refresh:hover{background:rgba(255,255,255,.28);}\n\n  .body{padding:15px 16px 18px;}\n  .field{margin-bottom:12px;}\n  label.lbl{display:block;font-size:11.5px;font-weight:700;color:#5A4F3C;margin-bottom:6px;}\n  .hint{font-size:10.5px;color:var(--muted);margin-top:5px;line-height:1.45;}\n\n  .inp,select.inp{width:100%;padding:11px 12px;border:1.5px solid var(--border-strong);border-radius:11px;background:var(--panel);font-size:16px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;transition:border-color .15s,box-shadow .15s;appearance:none;-webkit-appearance:none;}\n  .inp:focus,select.inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent);background:#fff;}\n  select.inp{background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23888' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\");background-repeat:no-repeat;background-position:right 13px center;padding-right:34px;cursor:pointer;}\n  .with-unit{position:relative;}\n  .with-unit .inp{padding-right:40px;}\n  .with-unit .unit{position:absolute;right:13px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:700;color:var(--muted);pointer-events:none;}\n  .with-unit.lead .inp{padding-left:34px;padding-right:13px;}\n  .with-unit.lead .unit{left:13px;right:auto;color:var(--accent-d);}\n  .row2{display:flex;gap:10px;}\n  .row2 .field{flex:1;}\n\n  .subcalc{margin-top:8px;display:flex;justify-content:space-between;gap:8px;background:var(--accent-tintbg);border:1px solid var(--border);border-radius:9px;padding:8px 11px;font-size:11px;color:#6A5F4C;}\n  .subcalc b{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;}\n\n  .judge{margin:4px 0 12px;background:linear-gradient(135deg,var(--accent-d),var(--accent));color:#fff;border-radius:14px;padding:13px 15px;box-shadow:0 8px 20px rgba(0,0,0,.15);}\n  .judge-label{font-size:11.5px;letter-spacing:.2px;color:#fff;opacity:.92;font-weight:700;}\n  .judge-main{display:flex;align-items:baseline;justify-content:space-between;margin-top:2px;gap:8px;}\n  .judge-main .big{font-size:27px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;color:#fff;}\n  .judge-main .cap{font-size:11px;color:#fff;opacity:.9;text-align:right;line-height:1.35;font-weight:600;}\n  .judge-sub{display:flex;justify-content:space-between;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.28);font-size:11.5px;color:#fff;opacity:.95;}\n  .judge-sub b{color:#fff;font-weight:800;font-variant-numeric:tabular-nums;}\n\n  .verdict{margin:0 0 12px;border-radius:12px;padding:11px 13px;border:1.5px solid;display:flex;align-items:center;gap:10px;}\n  .verdict .v-icon{font-size:20px;line-height:1;}\n  .verdict .v-main{font-weight:800;font-size:14px;}\n  .verdict .v-sub{font-weight:600;font-size:11px;margin-top:2px;opacity:.9;}\n  .v-go{background:#E7F6EE;border-color:#9AD9B6;color:#127A44;}\n  .v-mid{background:#FEF6E4;border-color:#F0D28A;color:#9A6B12;}\n  .v-no{background:#FCEAE8;border-color:#F0B4AE;color:#C0453B;}\n  .v-none{background:var(--accent-tintbg);border-color:var(--border);color:#7A6E58;}\n  .warn{margin:0 0 12px;border-radius:11px;padding:10px 12px;background:#FCEAE8;border:1.5px solid #F0B4AE;color:#B23A2E;font-size:12px;font-weight:700;line-height:1.45;}\n\n  .disc{margin:2px 0 4px;border-top:1px dashed var(--border-strong);padding-top:6px;}\n  .disc summary{cursor:pointer;font-size:11.5px;font-weight:700;color:#5A4F3C;list-style:none;padding:6px 0;user-select:none;}\n  .disc summary::-webkit-details-marker{display:none;}\n  .disc summary::before{content:'\u25b8';color:var(--accent-d);margin-right:6px;display:inline-block;transition:transform .15s;}\n  .disc[open] summary::before{transform:rotate(90deg);}\n\n  .results{margin-top:13px;border-top:1px dashed var(--border-strong);padding-top:13px;}\n  .result{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;padding:4px 0;}\n  .result + .result{margin-top:8px;}\n  .r-title{font-size:12px;font-weight:700;color:#5A4F3C;}\n  .r-sub{font-size:11px;font-weight:700;margin-top:2px;}\n  .r-tag{display:inline-block;font-size:9.5px;font-weight:700;color:var(--accent-d);background:var(--accent-soft);border-radius:5px;padding:2px 6px;margin-left:6px;vertical-align:middle;}\n  .r-amount{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;}\n  .pos{color:var(--profit);} .neg{color:var(--minus);}\n\n  .breakdown{margin-top:14px;background:var(--accent-tintbg);border:1px solid var(--border);border-radius:13px;padding:12px 14px;}\n  .bd-title{font-size:11px;font-weight:800;color:var(--ink);letter-spacing:.4px;margin-bottom:8px;}\n  .bd-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(0,0,0,.05);}\n  .bd-row:last-child{border-bottom:none;}\n  .bd-row.sub{color:var(--muted);font-size:11px;}\n  .bd-label{color:#5C5140;}\n  .bd-right{display:flex;align-items:baseline;gap:8px;white-space:nowrap;}\n  .bd-val{font-weight:700;font-variant-numeric:tabular-nums;}\n  .bd-pct{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:38px;text-align:right;}\n  .bd-row.total{border-top:1.5px solid var(--border-strong);margin-top:4px;padding-top:9px;font-weight:800;color:var(--ink);}\n\n  .note{margin-top:13px;font-size:9.5px;line-height:1.6;color:#9A8E79;}\n  .note b{color:#7A6E58;}\n  [hidden]{display:none !important;}\n<\/style>\n<\/head>\n<body data-mode=\"ebay\">\n<div class=\"app\">\n  <div class=\"head\">\n    <div class=\"eyebrow\" id=\"eyebrow\">eBay Tool \u00b7 USD \u00b7 $500+<\/div>\n    <div class=\"titlerow\"><h1 id=\"title\">\u5229\u76ca\u8a08\u7b97\u30c4\u30fc\u30eb<\/h1><span id=\"lockLabel\"><\/span><\/div>\n\n    <div class=\"modes\">\n      <button class=\"mode-btn active\" data-m=\"ebay\" type=\"button\">eBay<\/button>\n      <button class=\"mode-btn\" data-m=\"catawiki\" type=\"button\">Catawiki<\/button>\n      <button class=\"mode-btn\" data-m=\"retail\" type=\"button\">\u5c0f\u58f2<\/button>\n      <button class=\"mode-btn\" data-m=\"wholesale\" type=\"button\">\u696d\u8ca9<\/button>\n    <\/div>\n    <p class=\"mode-desc\" id=\"modeDesc\"><\/p>\n\n    <div class=\"fx\" id=\"fxBar\">\n      <div class=\"fx-top\">\n        <span class=\"fx-label\">\u672c\u65e5\u306e\u70ba\u66ff\u30ec\u30fc\u30c8<\/span>\n        <span class=\"fx-rate\"><small id=\"fxUnit\">1 $&nbsp;=&nbsp;\u00a5<\/small><span id=\"fxDisplay\">\u2014<\/span><\/span>\n      <\/div>\n      <div class=\"fx-bottom\">\n        <span class=\"fx-meta\" id=\"fxMeta\">\u30ec\u30fc\u30c8\u53d6\u5f97\u4e2d\u2026<\/span>\n        <span class=\"fx-edit\">\n          <input id=\"rateInput\" type=\"number\" step=\"0.01\" inputmode=\"decimal\" aria-label=\"\u70ba\u66ff\u30ec\u30fc\u30c8\">\n          <button class=\"fx-refresh\" id=\"refreshBtn\" type=\"button\">\u518d\u53d6\u5f97<\/button>\n        <\/span>\n      <\/div>\n    <\/div>\n  <\/div>\n\n  <div class=\"body\">\n    <!-- \u4ed5\u5165\u5148 -->\n    <div class=\"field\">\n      <label class=\"lbl\" for=\"supplier\" id=\"supplierLbl\">\u4ed5\u5165\u5148<\/label>\n      <select id=\"supplier\" class=\"inp\">\n        <option value=\"\" selected>\u9078\u629e\u3057\u3066\u304f\u3060\u3055\u3044<\/option>\n        <option value=\"ecoring_brand\">\u30a8\u30b3\u30ea\u30f3\u30b0\u3010\u30d6\u30e9\u30f3\u30c9\u3011<\/option>\n        <option value=\"ecoring_tool\">\u30a8\u30b3\u30ea\u30f3\u30b0\u3010\u9053\u5177\u3011<\/option>\n        <option value=\"aucnet\">\u30aa\u30fc\u30af\u30cd\u30c3\u30c8<\/option>\n        <option value=\"apre\">\u30a2\u30d7\u30ec\uff0f\u5927\u5409\u3010\u30d6\u30e9\u30f3\u30c9\u3011<\/option>\n        <option value=\"penguin\">\u30da\u30f3\u30ae\u30f3<\/option>\n        <option value=\"komehyo_std\">\u30b3\u30e1\u5175\u3010\u6642\u8a08\u30fb\u30d0\u30c3\u30b0\u30fb\u5c0f\u7269\u3011<\/option>\n        <option value=\"komehyo_apparel\">\u30b3\u30e1\u5175\u3010\u30a2\u30d1\u30ec\u30eb\u3011<\/option>\n        <option value=\"monobank\">\u30e2\u30ce\u30d0\u30f3\u30af\uff0f\u304a\u305f\u304b\u3089\u3084\uff0f\u30bf\u30a4\u30e0\u30ec\u30b9\uff0fJWA\uff0f\u30ea\u30d0\u30aa\u30af\u3010\u30d0\u30c3\u30b0\u30fb\u6642\u8a08\u3011<\/option>\n        <option value=\"rebaoku_apparel\">\u30ea\u30d0\u30aa\u30af\u3010\u30a2\u30d1\u30ec\u30eb\u3011\uff0f\u5927\u5409\u3010\u30a2\u30d1\u30ec\u30eb\u3011<\/option>\n        <option value=\"hamaya\">\u6d5c\u5c4b<\/option>\n        <option value=\"jds\">JDS<\/option>\n        <option value=\"jba\">JBA<\/option>\n        <option value=\"prime\">\u30d7\u30e9\u30a4\u30e0<\/option>\n        <option value=\"trefac\">\u30c8\u30ec\u30d5\u30a1\u30af<\/option>\n        <option value=\"sb_brand\">\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba\u3010\u6642\u8a08\u30fb\u30b8\u30e5\u30a8\u30ea\u30fc\u30fb\u30d0\u30c3\u30b0\u3011<\/option>\n        <option value=\"sb_small\">\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba\u3010\u30a2\u30af\u30bb\u30b5\u30ea\u30fc\u30fb\u5c0f\u7269\u3011<\/option>\n        <option value=\"sb_apparel\">\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba\u3010\u30a2\u30d1\u30ec\u30eb\u30fb\u9774\u30fb\u30b7\u30eb\u30d0\u30fc\u3011<\/option>\n        <option value=\"other\">\u305d\u306e\u4ed6<\/option>\n      <\/select>\n      <div class=\"hint\" id=\"feeHint\">\u4ed5\u5165\u5148\u3092\u9078\u3076\u3068\u624b\u6570\u6599\u30eb\u30fc\u30eb\u304c\u8868\u793a\u3055\u308c\u307e\u3059\u3002<\/div>\n    <\/div>\n\n    <!-- \u5165\u672d\u984d -->\n    <div class=\"field\">\n      <label class=\"lbl\" for=\"bid\" id=\"bidLbl\">\u5165\u672d\u984d/\u4ed5\u5165\u5024(\u5186)<\/label>\n      <div class=\"with-unit\">\n        <input id=\"bid\" class=\"inp\" type=\"number\" inputmode=\"numeric\" placeholder=\"0\">\n        <span class=\"unit\">\u5186<\/span>\n      <\/div>\n      <div class=\"subcalc\">\n        <span>\u4ed5\u5165\u5148\u624b\u6570\u6599 <b id=\"feeOut\">\u00a50<\/b><\/span>\n        <span>\u4ed5\u5165\u5024\uff08\u7a0e\u8fbc\uff09 <b id=\"costOut\">\u00a50<\/b><\/span>\n      <\/div>\n    <\/div>\n\n    <!-- \u8ca9\u58f2\u5148 (\u696d\u8ca9\u306e\u307f) -->\n    <div class=\"field\" id=\"sellerField\" hidden>\n      <label class=\"lbl\" for=\"seller\">\u8ca9\u58f2\u5148<\/label>\n      <select id=\"seller\" class=\"inp\">\n        <option value=\"\" selected>\u9078\u629e\u3057\u3066\u304f\u3060\u3055\u3044<\/option>\n        <option value=\"ecoring_brand\">\u30a8\u30b3\u30ea\u30f3\u30b0\u3010\u30d6\u30e9\u30f3\u30c9\u3011<\/option>\n        <option value=\"ecoring_tool\">\u30a8\u30b3\u30ea\u30f3\u30b0\u3010\u9053\u5177\u3011<\/option>\n        <option value=\"aucnet\">\u30aa\u30fc\u30af\u30cd\u30c3\u30c8<\/option>\n        <option value=\"jds\">JDS<\/option>\n        <option value=\"prime\">\u30d7\u30e9\u30a4\u30e0\u30aa\u30fc\u30af\u30b7\u30e7\u30f3<\/option>\n        <option value=\"jba\">JBA<\/option>\n        <option value=\"monobank\">\u3082\u306e\u30d0\u30f3\u30af<\/option>\n        <option value=\"hamaya\">\u6d5c\u5c4b<\/option>\n        <option value=\"apre\">\u30a2\u30d7\u30ec<\/option>\n        <option value=\"jwa\">JWA<\/option>\n        <option value=\"trefac\">\u30c8\u30ec\u30d5\u30a1\u30af<\/option>\n        <option value=\"penguin\">\u30da\u30f3\u30ae\u30f3<\/option>\n        <option value=\"sb_brand\">\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba\u3010\u6642\u8a08\u30fb\u30b8\u30e5\u30a8\u30ea\u30fc\u30fb\u30d0\u30c3\u30b0\u30fb\u5c0f\u7269\u3011<\/option>\n        <option value=\"sb_apparel\">\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba\u3010\u30a2\u30d1\u30ec\u30eb\u30fb\u9774\u30fb\u30b7\u30eb\u30d0\u30fc\u3011<\/option>\n      <\/select>\n      <div class=\"hint\" id=\"sellerHint\">\u8ca9\u58f2\u5148\u3092\u9078\u3076\u3068\u8ca9\u58f2\u624b\u6570\u6599\u304c\u8868\u793a\u3055\u308c\u307e\u3059\uff08\u7a0e\u629c\u2192\u7a0e\u8fbc\u3067\u53cd\u6620\uff09\u3002<\/div>\n    <\/div>\n\n    <!-- \u8ca9\u58f2\u4fa1\u683c -->\n    <div class=\"field\">\n      <label class=\"lbl\" for=\"price\" id=\"priceLbl\">\u4e88\u5b9a\u8ca9\u58f2\u4fa1\u683c\uff08\u30c9\u30eb\u30fb$500\u4ee5\u4e0a\uff09<\/label>\n      <div class=\"with-unit lead\" id=\"priceWrap\">\n        <input id=\"price\" class=\"inp\" type=\"number\" inputmode=\"decimal\" placeholder=\"0\">\n        <span class=\"unit\" id=\"priceUnit\">$<\/span>\n      <\/div>\n      <div class=\"hint\" id=\"priceJpy\">\u5186\u63db\u7b97 \u2014<\/div>\n    <\/div>\n\n    <div class=\"warn\" id=\"priceWarn\" hidden>\u26a0 $500\u672a\u6e80\u306f\u5bfe\u5fdc\u3057\u3066\u3044\u307e\u305b\u3093\u3002\u672c\u30c4\u30fc\u30eb\u306f\u8ca9\u58f2\u4fa1\u683c $500\u4ee5\u4e0a\u3067\u306e\u4ed5\u5165\u5224\u65ad\u7528\u3067\u3059\u3002<\/div>\n\n    <!-- \u76ee\u6a19\u7c97\u5229 -->\n    <div class=\"field\">\n      <label class=\"lbl\" for=\"target\" id=\"targetLbl\">\u76ee\u6a19\u7c97\u5229\uff08\u9084\u4ed8\u7121\u30fb\u5186\uff09<\/label>\n      <div class=\"with-unit\">\n        <input id=\"target\" class=\"inp\" type=\"number\" inputmode=\"numeric\" value=\"5000\">\n        <span class=\"unit\">\u5186<\/span>\n      <\/div>\n    <\/div>\n\n    <!-- \u4ed5\u5165\u308c\u5224\u65ad -->\n    <div class=\"judge\">\n      <div class=\"judge-label\" id=\"judgeLabel\">\u3053\u306e\u91d1\u984d\u307e\u3067\u4ed5\u5165OK<\/div>\n      <div class=\"judge-main\">\n        <span class=\"big\" id=\"maxBid\">\u2014<\/span>\n        <span class=\"cap\" id=\"maxBidCap\">\u4ed5\u5165\u5148\u3068\u8ca9\u58f2\u4fa1\u683c\u3092<br>\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044<\/span>\n      <\/div>\n      <div class=\"judge-sub\">\n        <span>\u640d\u76ca\u5206\u5c90 <b id=\"breakEven\">\u2014<\/b><\/span>\n        <span>\u76ee\u6a19\u7c97\u5229 <b id=\"targetProfit\">\u2014<\/b><\/span>\n      <\/div>\n    <\/div>\n\n    <div class=\"verdict v-none\" id=\"verdict\">\n      <span class=\"v-icon\" id=\"vIcon\">\u25fb<\/span>\n      <span>\n        <span class=\"v-main\" id=\"vMain\">\u91d1\u984d\u3092\u5165\u529b\u3059\u308b\u3068\u5224\u5b9a\u3057\u307e\u3059<\/span>\n        <span class=\"v-sub\" id=\"vSub\"><\/span>\n      <\/span>\n    <\/div>\n\n    <!-- eBay/Catawiki \u624b\u6570\u6599\u8a2d\u5b9a -->\n    <div id=\"ebayFees\">\n      <div class=\"field\">\n        <label class=\"lbl\" for=\"fvf\">\u6210\u7d04\u624b\u6570\u6599\uff08%\uff09<\/label>\n        <select id=\"fvf\" class=\"inp\">\n          <option value=\"13\">13%<\/option>\n          <option value=\"18\" selected>18%<\/option>\n        <\/select>\n        <div class=\"hint\">\u65e2\u5b9a18%\u300213%\uff0f18%\u3067\u5207\u66ff\u3002\u9078\u3093\u3060\u5024\u306f\u4fdd\u5b58\u3055\u308c\u3001\u6b21\u56de\u3082\u305d\u306e\u5024\u3067\u30b9\u30bf\u30fc\u30c8\u3057\u307e\u3059\u3002<\/div>\n      <\/div>\n      <div class=\"field\">\n        <label class=\"lbl\" for=\"adfee\">\u5e83\u544a\u8cbb\uff08%\uff09<\/label>\n        <div class=\"with-unit\">\n          <input id=\"adfee\" class=\"inp\" type=\"number\" inputmode=\"decimal\" value=\"3\">\n          <span class=\"unit\">%<\/span>\n        <\/div>\n        <div class=\"hint\">\u65e2\u5b9a3%\u3002\u5909\u66f4\u3059\u308b\u3068\u4fdd\u5b58\u3055\u308c\u3001\u6b21\u56de\u3082\u305d\u306e\u5024\u3067\u30b9\u30bf\u30fc\u30c8\u3057\u307e\u3059\u3002<\/div>\n      <\/div>\n    <\/div>\n\n    <!-- \u5c0f\u58f2 \u624b\u6570\u6599\u8a2d\u5b9a -->\n    <div id=\"retailFees\" hidden>\n      <div class=\"row2\">\n        <div class=\"field\">\n          <label class=\"lbl\" for=\"retailFvf\">\u8ca9\u58f2\u624b\u6570\u6599\uff08%\uff09<\/label>\n          <div class=\"with-unit\">\n            <input id=\"retailFvf\" class=\"inp\" type=\"number\" inputmode=\"decimal\" value=\"10\">\n            <span class=\"unit\">%<\/span>\n          <\/div>\n          <div class=\"hint\">\u65e2\u5b9a10%\uff08\u5909\u66f4\u53ef\u30fb\u4fdd\u5b58\uff09<\/div>\n        <\/div>\n        <div class=\"field\">\n          <label class=\"lbl\" for=\"retailShip\">\u9001\u6599\uff08\u5186\uff09<\/label>\n          <div class=\"with-unit\">\n            <input id=\"retailShip\" class=\"inp\" type=\"number\" inputmode=\"numeric\" value=\"800\">\n            <span class=\"unit\">\u5186<\/span>\n          <\/div>\n          <div class=\"hint\">\u65e2\u5b9a800\u5186\uff08\u5909\u66f4\u53ef\u30fb\u4fdd\u5b58\uff09<\/div>\n        <\/div>\n      <\/div>\n    <\/div>\n\n    <!-- \u9001\u6599\u8a2d\u5b9a (eBay/Catawiki) -->\n    <details class=\"disc\" id=\"shipDisc\">\n      <summary>\u9001\u6599\u306e\u8a2d\u5b9a\u3092\u8abf\u6574<\/summary>\n      <div class=\"row2\" style=\"margin-top:8px;\">\n        <div class=\"field\" style=\"margin-bottom:2px;\">\n          <label class=\"lbl\" for=\"shipBuyer\" id=\"shipBuyerLbl\">\u9001\u6599\uff08\u30d0\u30a4\u30e4\u30fc\u8ca0\u62c5\u30fb$\uff09<\/label>\n          <div class=\"with-unit lead\">\n            <input id=\"shipBuyer\" class=\"inp\" type=\"number\" inputmode=\"decimal\" value=\"0\">\n            <span class=\"unit\" id=\"shipBuyerUnit\">$<\/span>\n          <\/div>\n        <\/div>\n        <div class=\"field\" style=\"margin-bottom:2px;\">\n          <label class=\"lbl\" for=\"shipCost\">\u9001\u6599 \u5b9f\u8cbb\uff08\u5186\uff09<\/label>\n          <div class=\"with-unit\">\n            <input id=\"shipCost\" class=\"inp\" type=\"number\" inputmode=\"numeric\" value=\"0\">\n            <span class=\"unit\">\u5186<\/span>\n          <\/div>\n        <\/div>\n      <\/div>\n    <\/details>\n\n    <div class=\"results\">\n      <div class=\"result\">\n        <div>\n          <div class=\"r-title\" id=\"profitNoTitle\">\u5229\u76ca\uff08\u9084\u4ed8\u7121\uff09<\/div>\n          <div class=\"r-sub\" id=\"marginNo\">\u2014<\/div>\n        <\/div>\n        <div class=\"r-amount pos\" id=\"profitNo\">\u00a50<\/div>\n      <\/div>\n      <div class=\"result\" id=\"profitYesRow\">\n        <div>\n          <div class=\"r-title\">\u5229\u76ca\uff08\u9084\u4ed8\u6709\uff09<span class=\"r-tag\">\uff0b\u6d88\u8cbb\u7a0e\u9084\u4ed8<\/span><\/div>\n          <div class=\"r-sub\" id=\"marginYes\">\u2014<\/div>\n        <\/div>\n        <div class=\"r-amount pos\" id=\"profitYes\">\u00a50<\/div>\n      <\/div>\n    <\/div>\n\n    <div class=\"breakdown\">\n      <div class=\"bd-title\">\u5185\u8a33\uff08\u5186\uff09<\/div>\n      <div id=\"bdRows\"><\/div>\n    <\/div>\n\n    <div class=\"note\" id=\"note\"><\/div>\n  <\/div>\n<\/div>\n\n<script>\n(function(){\n  var $ = function(id){ return document.getElementById(id); };\n\n  /* ---------------- \u4ed5\u5165\u5148\uff08\u8cb7\u3044\u5074\uff09\u30eb\u30fc\u30eb ---------------- */\n  /* \u4ed5\u5165\u5024(\u7a0e\u8fbc) = \u5916\u7a0e:(\u5165\u672d+\u624b\u6570\u6599)\u00d71.10 / \u5185\u7a0e:(\u5165\u672d+\u624b\u6570\u6599) */\n  var supplierRules = {\n    ecoring_brand:{ hint:'\u301c\u00a510,000 : 500\u5186 \uff0f \u301c\u00a549,999 : 1,000\u5186 \uff0f \u301c\u00a5499,999 : 2,000\u5186', fee:function(b){ if(b<=10000)return 500; if(b<=49999)return 1000; return 2000; }, taxIncluded:false },\n    ecoring_tool:{ hint:'\u5165\u672d\u984d \u00d7 10%\uff08\uff0b\u6d88\u8cbb\u7a0e10%\uff09', fee:function(b){ return b*0.10; }, taxIncluded:false },\n    aucnet:{ hint:'\u5165\u672d\u984d \u00d7 4%', fee:function(b){ return b*0.04; }, taxIncluded:false },\n    apre:{ hint:'\u5165\u672d\u984d \u00d7 5%\uff08\u5927\u5409\u306f\u30d6\u30e9\u30f3\u30c9\u54c1\uff09', fee:function(b){ return b*0.05; }, taxIncluded:false },\n    penguin:{ hint:'\u843d\u672d\u624b\u6570\u6599 \u5165\u672d\u984d \u00d7 5%\uff08\uff0b\u6d88\u8cbb\u7a0e10%\uff09', fee:function(b){ return b*0.05; }, taxIncluded:false },\n    komehyo_std:{ hint:'\u843d\u672d\u624b\u6570\u6599 \u5165\u672d\u984d \u00d7 3%\uff08\u843d\u672d\u984d\uff0b\u624b\u6570\u6599\u306b\u6d88\u8cbb\u7a0e10%\uff09', fee:function(b){ return b*0.03; }, taxIncluded:false },\n    komehyo_apparel:{ hint:'\u30a2\u30d1\u30ec\u30eb\u843d\u672d\u624b\u6570\u6599 \u301c1\u4e07:15% \uff0f\u301c2\u4e07:10% \uff0f2\u4e07\u8d85:5%\uff08\uff0b\u6d88\u8cbb\u7a0e10%\uff09', fee:function(b){ if(b<=10000)return b*0.15; if(b<=20000)return b*0.10; return b*0.05; }, taxIncluded:false },\n    monobank:{ hint:'\u5165\u672d\u984d \u00d7 3%\uff08\u30ea\u30d0\u30aa\u30af\u306f\u30d0\u30c3\u30b0\u30fb\u6642\u8a08\uff09', fee:function(b){ return b*0.03; }, taxIncluded:false },\n    rebaoku_apparel:{ hint:'\u30a2\u30d1\u30ec\u30eb\u843d\u672d\u624b\u6570\u6599 \u5165\u672d\u984d \u00d7 10%\uff08\uff0b\u6d88\u8cbb\u7a0e10%\uff09\u203b\u30ea\u30d0\u30aa\u30af\u30fb\u5927\u5409', fee:function(b){ return b*0.10; }, taxIncluded:false },\n    hamaya:{ hint:'\u5165\u672d\u984d \u00d7 3.3% \uff0b 220\u5186', fee:function(b){ return b*0.033 + 220; }, taxIncluded:false },\n    jds:{ hint:'\u5165\u672d\u984d \u00d7 10%\uff08\u5185\u7a0e\u30fb\u6d88\u8cbb\u7a0e\u306e\u4e0a\u4e57\u305b\u7121\u3057\uff09', fee:function(b){ return b*0.10; }, taxIncluded:true },\n    jba:{ hint:'\u301c\u00a510,000 : 500\u5186 \uff0f \u301c\u00a599,999 : 5% \uff0f \u305d\u308c\u4ee5\u4e0a : 2%', fee:function(b){ if(b<=10000)return 500; if(b<=99999)return b*0.05; return b*0.02; }, taxIncluded:false },\n    prime:{ hint:'\u5165\u672d\u984d \u00d7 8%', fee:function(b){ return b*0.08; }, taxIncluded:false },\n    trefac:{ hint:'\u301c\u00a5199,999 : 5% \uff0f \u305d\u308c\u4ee5\u4e0a : 1%', fee:function(b){ if(b<=199999)return b*0.05; return b*0.01; }, taxIncluded:false },\n    sb_brand:{ hint:'\u843d\u672d\u624b\u6570\u6599 \u5165\u672d\u984d \u00d7 5%\uff08\uff0b\u6d88\u8cbb\u7a0e10%\uff09\uff0b\u53c2\u52a0\u8cbb\uff08\u7a0e\u8fbc\uff0910\u4e07\u672a\u6e80:1,100\uff0f50\u4e07\u672a\u6e80:5,500\uff0f50\u4e07\u4ee5\u4e0a:11,000', rate:0.05, part:function(b){ return b<100000?1100:(b<500000?5500:11000); }, fee:function(b){ return b*0.05 + this.part(b)/1.1; }, taxIncluded:false },\n    sb_small:{ hint:'\u843d\u672d\u624b\u6570\u6599 \u5165\u672d\u984d \u00d7 5%\uff08\uff0b\u6d88\u8cbb\u7a0e10%\uff09\uff0b\u53c2\u52a0\u8cbb\uff08\u7a0e\u8fbc\uff0910\u4e07\u672a\u6e80:1,100\uff0f10\u4e07\u4ee5\u4e0a:3,300', rate:0.05, part:function(b){ return b<100000?1100:3300; }, fee:function(b){ return b*0.05 + this.part(b)/1.1; }, taxIncluded:false },\n    sb_apparel:{ hint:'\u843d\u672d\u624b\u6570\u6599 \u5165\u672d\u984d \u00d7 10%\uff08\uff0b\u6d88\u8cbb\u7a0e10%\uff09\uff0b\u53c2\u52a0\u8cbb\uff08\u7a0e\u8fbc\uff0910\u4e07\u672a\u6e80:1,100\uff0f10\u4e07\u4ee5\u4e0a:3,300', rate:0.10, part:function(b){ return b<100000?1100:3300; }, fee:function(b){ return b*0.10 + this.part(b)/1.1; }, taxIncluded:false },\n    other:{ hint:'\u5165\u529b\u984d\u304c\u305d\u306e\u307e\u307e\u4ed5\u5165\u5024\uff08\u624b\u6570\u6599\u30fb\u6d88\u8cbb\u7a0e\u306e\u4e0a\u4e57\u305b\u7121\u3057\uff0f\u5185\u7a0e\u3068\u3057\u3066\u8a08\u7b97)', fee:function(b){ return 0; }, taxIncluded:true }\n  };\n  var supplierShort={ecoring_brand:'\u30a8\u30b3\u30ea\u30f3\u30b0 \u30d6\u30e9\u30f3\u30c9',ecoring_tool:'\u30a8\u30b3\u30ea\u30f3\u30b0 \u9053\u5177',aucnet:'\u30aa\u30fc\u30af\u30cd\u30c3\u30c8',apre:'\u30a2\u30d7\u30ec\uff0f\u5927\u5409 \u30d6\u30e9\u30f3\u30c9',penguin:'\u30da\u30f3\u30ae\u30f3',komehyo_std:'\u30b3\u30e1\u5175 \u6642\u8a08/\u30d0\u30c3\u30b0/\u5c0f\u7269',komehyo_apparel:'\u30b3\u30e1\u5175 \u30a2\u30d1\u30ec\u30eb',monobank:'\u30e2\u30ce\u30d0\u30f3\u30af\u4ed6',rebaoku_apparel:'\u30ea\u30d0\u30aa\u30af\uff0f\u5927\u5409 \u30a2\u30d1\u30ec\u30eb',sb_brand:'\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba \u6642\u8a08/\u30b8\u30e5\u30a8\u30ea\u30fc/\u30d0\u30c3\u30b0',sb_small:'\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba \u30a2\u30af\u30bb\u30b5\u30ea\u30fc/\u5c0f\u7269',sb_apparel:'\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba \u30a2\u30d1\u30ec\u30eb/\u9774/\u30b7\u30eb\u30d0\u30fc',hamaya:'\u6d5c\u5c4b',jds:'JDS',jba:'JBA',prime:'\u30d7\u30e9\u30a4\u30e0',trefac:'\u30c8\u30ec\u30d5\u30a1\u30af',other:'\u305d\u306e\u4ed6'};\n\n  function purchaseCost(key,bid){\n    var r=supplierRules[key]; if(!r) return {fee:0,incl:0};\n    var fee=r.fee(bid); var base=bid+fee;\n    return {fee:fee, incl: r.taxIncluded?base:base*1.10};\n  }\n\n  /* ---------------- \u8ca9\u58f2\u5148\uff08\u696d\u8ca9\u30fb\u58f2\u308a\u5074\uff09\u30eb\u30fc\u30eb ---------------- */\n  /* \u624b\u6570\u6599\u306f\u7a0e\u629c\u5165\u529b \u2192 \u6700\u7d42\u7a0e\u8fbc(\u00d71.10)\u3002JDS\u306e\u307f\u5185\u7a0e(\u00d71.10\u3057\u306a\u3044)\u3002photo=\u64ae\u5f71/\u4e8b\u52d9\u624b\u6570\u6599(\u7a0e\u629c) */\n  var sellerRules = {\n    ecoring_brand:{ label:'\u30a8\u30b3\u30ea\u30f3\u30b0\u3010\u30d6\u30e9\u30f3\u30c9\u3011', hint:'\u301c1\u4e07:500 \uff0f\u301c4.9\u4e07:1,000 \uff0f5\u4e07\u301c:2,000\uff08\uff0b\u64ae\u5f71400\uff09', fee:function(p){ if(p<=10000)return 500; if(p<=49999)return 1000; return 2000; }, photo:400, taxIncluded:false },\n    ecoring_tool:{ label:'\u30a8\u30b3\u30ea\u30f3\u30b0\u3010\u9053\u5177\u3011', hint:'\u58f2\u4e0a \u00d7 10%\uff08\uff0b\u64ae\u5f71400\uff09', fee:function(p){ return p*0.10; }, photo:400, taxIncluded:false },\n    aucnet:{ label:'\u30aa\u30fc\u30af\u30cd\u30c3\u30c8', hint:'\u58f2\u4e0a \u00d7 3%\uff08\uff0b\u64ae\u5f71300\uff09', fee:function(p){ return p*0.03; }, photo:300, taxIncluded:false },\n    jds:{ label:'JDS', hint:'\u58f2\u4e0a \u00d7 10%\uff08\u5185\u7a0e\u30fb\u843d\u672d\u91d1\u984d\u306b\u542b\u307e\u308c\u308b\uff09', fee:function(p){ return p*0.10; }, photo:0, taxIncluded:true },\n    komehyo_watch:{ label:'\u30b3\u30e1\u5175\u3010\u6642\u8a08\u3011', hint:'\u301c2\u4e07:1,000\u5186 \uff0f2\u4e07\u8d85:0%\uff08\uff0b\u4e8b\u52d91,000\uff09', fee:function(p){ return p<=20000?1000:0; }, photo:1000, taxIncluded:false },\n    komehyo_jewel:{ label:'\u30b3\u30e1\u5175\u3010\u5b9d\u77f3\u3011', hint:'\u301c2\u4e07:1,000\u5186 \uff0f2\u4e07\u8d85:5%\uff08\uff0b\u4e8b\u52d91,000\uff09', fee:function(p){ return p<=20000?1000:p*0.05; }, photo:1000, taxIncluded:false },\n    komehyo_bag:{ label:'\u30b3\u30e1\u5175\u3010\u30d0\u30c3\u30b0\u3011', hint:'\u301c2\u4e07:1,000\u5186 \uff0f2\u4e07\u8d85:5%\uff08\uff0b\u4e8b\u52d91,000\uff09', fee:function(p){ return p<=20000?1000:p*0.05; }, photo:1000, taxIncluded:false },\n    komehyo_small:{ label:'\u30b3\u30e1\u5175\u3010\u5c0f\u7269\u3011', hint:'\u301c2\u4e07:1,000\u5186 \uff0f2\u4e07\u8d85:5%\uff08\uff0b\u4e8b\u52d91,000\uff09', fee:function(p){ return p<=20000?1000:p*0.05; }, photo:1000, taxIncluded:false },\n    komehyo_apparel:{ label:'\u30b3\u30e1\u5175\u3010\u30a2\u30d1\u30ec\u30eb\u3011', hint:'\u301c2\u5343:80%/\u301c3\u5343:70%/\u301c4\u5343:60%/\u301c5\u5343:50%/\u301c6\u5343:20%/6\u5343\u8d85:5%\uff08\uff0b\u4e8b\u52d91,000\uff09', fee:function(p){ if(p<=2000)return p*0.80; if(p<=3000)return p*0.70; if(p<=4000)return p*0.60; if(p<=5000)return p*0.50; if(p<=6000)return p*0.20; return p*0.05; }, photo:1000, taxIncluded:false },\n    prime:{ label:'\u30d7\u30e9\u30a4\u30e0\u30aa\u30fc\u30af\u30b7\u30e7\u30f3', hint:'\u624b\u6570\u6599\u7121\u6599', fee:function(p){ return 0; }, photo:0, taxIncluded:false },\n    jba:{ label:'JBA', hint:'\u58f2\u4e0a \u00d7 3%\uff08\uff0b\u64ae\u5f71500\uff09', fee:function(p){ return p*0.03; }, photo:500, taxIncluded:false },\n    monobank:{ label:'\u3082\u306e\u30d0\u30f3\u30af', hint:'\u58f2\u4e0a \u00d7 5%\uff08\uff0b\u64ae\u5f71500\uff09', fee:function(p){ return p*0.05; }, photo:500, taxIncluded:false },\n    hamaya:{ label:'\u6d5c\u5c4b', hint:'\u58f2\u4e0a \u00d7 3.3% \uff0b 400\u5186', fee:function(p){ return p*0.033; }, photo:400, taxIncluded:false },\n    apre:{ label:'\u30a2\u30d7\u30ec', hint:'\u301c1\u4e07:\u4e00\u5f8b500\u5186 \uff0f1\u4e07\u8d85:3%', fee:function(p){ return p<=10000?500:p*0.03; }, photo:0, taxIncluded:false },\n    jwa:{ label:'JWA', hint:'30\u4e07\u672a\u6e80:5% \uff0f30\u4e07\u4ee5\u4e0a:3%', fee:function(p){ return p<300000?p*0.05:p*0.03; }, photo:0, taxIncluded:false },\n    trefac:{ label:'\u30c8\u30ec\u30d5\u30a1\u30af', hint:'\u301c3\u5343:10%/\u301c1\u4e07:5%/\u301c20\u4e07:3%/20\u4e07\u8d85:1%', fee:function(p){ if(p<3000)return p*0.10; if(p<10000)return p*0.05; if(p<200000)return p*0.03; return p*0.01; }, photo:0, taxIncluded:false },\n    penguin:{ label:'\u30da\u30f3\u30ae\u30f3', hint:'\u64ae\u5f71\u624b\u6570\u6599 500\u5186\u306e\u307f', fee:function(p){ return 0; }, photo:500, taxIncluded:false },\n    sb_brand:{ label:'\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba\u3010\u6642\u8a08\u30fb\u30b8\u30e5\u30a8\u30ea\u30fc\u30fb\u30d0\u30c3\u30b0\u30fb\u5c0f\u7269\u3011', hint:'\u58f2\u4e0a \u00d7 5%\uff08\uff0b\u6d88\u8cbb\u7a0e\uff09\uff0b\u51fa\u54c1\u624b\u6570\u6599 1,100\u5186\uff08\u7a0e\u8fbc\uff09', fee:function(p){ return p*0.05; }, photo:1000, photoLabel:'\u51fa\u54c1\u624b\u6570\u6599', taxIncluded:false },\n    sb_apparel:{ label:'\u30b9\u30bf\u30fc\u30d0\u30a4\u30e4\u30fc\u30ba\u3010\u30a2\u30d1\u30ec\u30eb\u30fb\u9774\u30fb\u30b7\u30eb\u30d0\u30fc\u3011', hint:'\u58f2\u4e0a \u00d7 10%\uff08\uff0b\u6d88\u8cbb\u7a0e\uff09\uff0b\u51fa\u54c1\u624b\u6570\u6599 1,100\u5186\uff08\u7a0e\u8fbc\uff09', fee:function(p){ return p*0.10; }, photo:1000, photoLabel:'\u51fa\u54c1\u624b\u6570\u6599', taxIncluded:false }\n  };\n  function sellCost(key,price){\n    var r=sellerRules[key]; if(!r) return null;\n    var fee=r.fee(price); var photo=r.photo||0;\n    var feeIncl = r.taxIncluded ? fee : fee*1.10;   // \u7a0e\u629c\u2192\u7a0e\u8fbc\n    var photoIncl = r.taxIncluded ? photo : photo*1.10;\n    return {rule:r, fee:fee, photo:photo, feeIncl:feeIncl, photoIncl:photoIncl, total:feeIncl+photoIncl};\n  }\n\n  /* ---------------- \u30e2\u30fc\u30c9\u5b9a\u7fa9 ---------------- */\n  var MODES = {\n    ebay:     { cur:'USD', sym:'$', fx:true,  rebate:true,  seller:false, desc:'\u4ed5\u5165\u5148\u30fb\u5165\u672d\u984d\u30fb\u8ca9\u58f2\u4fa1\u683c($)\u3092\u5165\u308c\u308b\u3068\u3001\u4e0a\u9650\u5165\u672d\u984d\u3068\u4ed5\u5165\u5224\u65ad(GO/NG)\u3092\u5373\u8868\u793a\u3002\u624b\u6570\u6599\u30fb\u6d88\u8cbb\u7a0e\u9084\u4ed8\u30fb\u70ba\u66ff\u3092\u81ea\u52d5\u8a08\u7b97\u3002', eyebrow:'eBay Tool \u00b7 USD \u00b7 $500+' },\n    catawiki: { cur:'EUR', sym:'\u20ac', fx:true,  rebate:true,  seller:false, desc:'Catawiki(\u30e6\u30fc\u30ed)\u5411\u3051\u3002\u6210\u7d04\u624b\u6570\u6599\u4e00\u5f8b12.5%\u30fb\u9001\u6599\u20ac27\u30d0\u30a4\u30e4\u30fc\u8ca0\u62c5\u30fb\u6d88\u8cbb\u7a0e\u9084\u4ed8\u30fb\u70ba\u66ff\u3092\u81ea\u52d5\u8a08\u7b97\u3002', eyebrow:'Catawiki Tool \u00b7 EUR' },\n    retail:   { cur:'JPY', sym:'\u5186',fx:false, rebate:false, seller:false, desc:'\u56fd\u5185\u5c0f\u58f2\u308a\u5411\u3051\u3002\u8ca9\u58f2\u624b\u6570\u659910%(\u53ef\u5909)\u30fb\u9001\u6599800\u5186\u56fa\u5b9a\u306e\u307f\u3002\u9084\u4ed8\u30fb\u70ba\u66ff\u306a\u3057\u3002\u76ee\u6a19\u7c97\u52295,000\u5186\u3067\u4e0a\u9650\u4ed5\u5165\u984d\u3092\u8868\u793a\u3002', eyebrow:'\u5c0f\u58f2 \u00b7 JPY' },\n    wholesale:{ cur:'JPY', sym:'\u5186',fx:false, rebate:false, seller:true,  desc:'\u696d\u8005\u9593\u8ca9\u58f2\u3002\u4ed5\u5165\u5148\u3067\u4ed5\u5165\u308c\u2192\u8ca9\u58f2\u5148\u3067\u58f2\u3063\u305f\u6642\u306e\u7c97\u5229\u3092\u8868\u793a\u3002\u8ca9\u58f2\u624b\u6570\u6599\u306f\u8ca9\u58f2\u5148\u5225(\u7a0e\u629c\u2192\u7a0e\u8fbc)\u3001\u9001\u6599\u306a\u3057\u3002\u76ee\u6a19\u7c97\u52295,000\u5186\u3067\u4e0a\u9650\u4ed5\u5165\u984d\u3092\u8868\u793a\u3002', eyebrow:'\u696d\u8ca9 \u00b7 JPY' }\n  };\n  var mode='';   // \u521d\u56de\u306fsetMode\u3067\u8a2d\u5b9a\n  // \u8ca9\u8def\u3054\u3068\u306b\u5165\u529b\u5024\u3092\u72ec\u7acb\u4fdd\u6301\uff08\u30bf\u30d6\u3092\u5207\u308a\u66ff\u3048\u3066\u3082\u6df7\u3056\u3089\u306a\u3044\uff09\n  var modeState={};\n  // \u203b \u30c4\u30fc\u30eb\u3092\u9589\u3058\u308b\uff08\u30d1\u30cd\u30eb/\u30da\u30fc\u30b8\u3092\u9589\u3058\u308b\u30fb\u518d\u8aad\u8fbc\uff09\u3068\u5168\u3066\u30ea\u30bb\u30c3\u30c8\u3002\u958b\u3044\u3066\u3044\u308b\u9593\u306f\u30bf\u30d6\u3054\u3068\u306b\u6700\u5f8c\u306e\u5165\u529b\u3092\u4fdd\u6301\n  var STATE_FIELDS=['supplier','bid','price','target','seller','shipBuyer','shipCost'];\n  var STATE_DEFAULT={target:'5000', shipCost:'0'};\n  function stateDefault(k,id){ if(id==='shipBuyer') return k==='catawiki'?'27':'0'; return STATE_DEFAULT[id]!=null?STATE_DEFAULT[id]:''; }\n  function stashState(k){ var o={}; STATE_FIELDS.forEach(function(id){ var el=$(id); if(el) o[id]=el.value; });\n    if(MODES[k]&&MODES[k].fx){ o._fx={rate:rate, manual:rateManual, input:$('rateInput').value, disp:$('fxDisplay').textContent, meta:$('fxMeta').textContent}; }\n    modeState[k]=o; }\n  // \u4ed5\u5165\u5148\u30fb\u8ca9\u58f2\u5148\u306f\u8ca9\u8def\u3054\u3068\u306b\u6700\u5f8c\u306e\u9078\u629e\u3092\u8a18\u61b6\uff08\u30bf\u30d6\u79fb\u52d5\u30fb\u518d\u8aad\u8fbc\u3067\u3082\u6b8b\u3059\uff09\n  function loadSel(k){ try{ return JSON.parse(localStorage.getItem('t_sel_'+k)||'{}')||{}; }catch(e){ return {}; } }\n  function saveSel(){ try{ localStorage.setItem('t_sel_'+mode, JSON.stringify({supplier:$('supplier').value, seller:$('seller').value})); }catch(e){} }\n  function restoreState(k){ var o=modeState[k]||{}; STATE_FIELDS.forEach(function(id){ var el=$(id); if(!el) return;\n    var v = o.hasOwnProperty(id) ? o[id] : stateDefault(k,id);\n    el.value=v; if((id==='supplier'||id==='seller') && el.value!==v) el.value=''; }); }\n\n  /* ---------------- FX ---------------- */\n  var FALLBACK={USD:158.00, EUR:178.00};\n  var rate=FALLBACK.USD, rateManual=false;\n  function curOf(){ return MODES[mode].cur; }\n  function loadRate(cur){ try{ var v=parseFloat(localStorage.getItem('t_rate_'+cur)); return (!isNaN(v)&&v>0)?v:null; }catch(e){ return null; } }\n  function saveRate(cur,v){ try{ localStorage.setItem('t_rate_'+cur, String(v)); }catch(e){} }\n\n  var FX_SOURCES = {\n    USD:[\n      {url:'https://api.frankfurter.dev/v1/latest?from=USD&to=JPY',parse:function(d){return d&&d.rates&&d.rates.JPY?{r:d.rates.JPY,note:'ECB\u57fa\u6e96 \u00b7 '+(d.date||'')+' \u00b7 \u81ea\u52d5\u53d6\u5f97'}:null;}},\n      {url:'https://open.er-api.com/v6/latest/USD',parse:function(d){return d&&d.rates&&d.rates.JPY?{r:d.rates.JPY,note:'\u81ea\u52d5\u53d6\u5f97 \u00b7 '+((d.time_last_update_utc||'').slice(0,16))}:null;}}\n    ],\n    EUR:[\n      {url:'https://api.frankfurter.dev/v1/latest?from=EUR&to=JPY',parse:function(d){return d&&d.rates&&d.rates.JPY?{r:d.rates.JPY,note:'ECB\u57fa\u6e96 \u00b7 '+(d.date||'')+' \u00b7 \u81ea\u52d5\u53d6\u5f97'}:null;}},\n      {url:'https://open.er-api.com/v6/latest/EUR',parse:function(d){return d&&d.rates&&d.rates.JPY?{r:d.rates.JPY,note:'\u81ea\u52d5\u53d6\u5f97 \u00b7 '+((d.time_last_update_utc||'').slice(0,16))}:null;}}\n    ]\n  };\n  function applyRate(r,meta,forCur){\n    if(forCur && forCur!==curOf()){ if(!loadRate(forCur)) saveRate(forCur, Math.round(r*100)/100); return; }   // \u5225\u306e\u8ca9\u8def\u306b\u79fb\u3063\u305f\u5f8c\u306b\u5c4a\u3044\u305f\u7d50\u679c\u306f\u8868\u793a\u306b\u53cd\u6620\u3057\u306a\u3044\n    if(rateManual) return;                                   // \u624b\u5165\u529b/\u4fdd\u5b58\u30ec\u30fc\u30c8\u3092\u512a\u5148\u3001\u81ea\u52d5\u53d6\u5f97\u3067\u4e0a\u66f8\u304d\u3057\u306a\u3044\n    rate=r; $('fxDisplay').textContent=(Math.round(r*100)/100).toFixed(2);\n    $('rateInput').value=(Math.round(r*100)/100).toFixed(2);\n    saveRate(curOf(), Math.round(r*100)/100);                // \u53d6\u5f97\u3067\u304d\u305f\u30ec\u30fc\u30c8\u3092\u8a18\u61b6\n    $('fxMeta').textContent=meta; render();\n  }\n  function fetchRate(){\n    if(!MODES[mode].fx) return;\n    if(rateManual){ render(); return; }                      // \u624b\u5165\u529b\u30ec\u30fc\u30c8\u304c\u3042\u308b\u306e\u3067\u53d6\u5f97\u4e0d\u8981\n    var cur=curOf(); $('fxMeta').textContent='\u30ec\u30fc\u30c8\u53d6\u5f97\u4e2d\u2026';\n    var list=FX_SOURCES[cur]||[], i=0;\n    (function next(){\n      if(i>=list.length){\n        if(cur!==curOf()) return;\n        var keep=loadRate(cur)||FALLBACK[cur];\n        rate=keep; $('fxDisplay').textContent=keep.toFixed(2);\n        if(!$('rateInput').value) $('rateInput').value=keep.toFixed(2);\n        $('fxMeta').textContent='\u81ea\u52d5\u53d6\u5f97\u3067\u304d\u307e\u305b\u3093 \u2014 \u4e0b\u306e\u6b04\u306b\u30ec\u30fc\u30c8\u3092\u5165\u529b\u3059\u308c\u3070\u6b21\u56de\u3082\u8a18\u61b6\u3057\u307e\u3059';\n        render(); return;\n      }\n      var s=list[i++];\n      fetch(s.url,{cache:'no-store'}).then(function(res){if(!res.ok)throw 0;return res.json();})\n        .then(function(d){var o=s.parse(d);if(!o)throw 0;applyRate(o.r,o.note,cur);})\n        .catch(function(){next();});\n    })();\n  }\n\n  /* ---------------- helpers ---------------- */\n  function yen(n){ return '\u00a5' + (Math.trunc(n/100)*100).toLocaleString('ja-JP'); }   // 100\u5186\u5358\u4f4d\uff08\u4e0a\u9650\u5165\u672d\u984d\u306e\u5224\u5b9a\u7528\uff09\n  function yenExact(n){ return '\u00a5' + Math.round(n).toLocaleString('ja-JP'); }          // 1\u5186\u5358\u4f4d\uff08\u91d1\u984d\u306e\u660e\u7d30\u7528\uff09\n  function pct(n){ return (Math.round(n*1000)/10).toFixed(1) + '%'; }\n  function num(id){ var v=parseFloat($(id).value); return isNaN(v)?0:v; }\n  function signYen(n){ return n<0?'\uff0d'+yenExact(Math.abs(n)):yenExact(n); }\n  function roundUnit(n,unit){ n=Math.round(n); var base=Math.floor(n/unit)*unit, rem=n-base; return rem>unit/2 ? base+unit : base; }  // \u7aef\u6570\u304c\u534a\u5206(unit/2)\u3088\u308a\u5927\u304d\u3044\u3068\u304d\u3060\u3051\u5207\u4e0a\u3052\u3001\u3061\u3087\u3046\u3069\u534a\u5206\u4ee5\u4e0b\u306f\u5207\u6368\u3066\n  function headUnit(){ return $('supplier').value==='ecoring_tool' ? 100 : 1000; }     // \u30a8\u30b3\u30ea\u30f3\u30b0\u9053\u5177\u306f100\u5186\u5358\u4f4d\u3001\u4ed6\u306f1000\u5186\u5358\u4f4d\n  function yenHead(n){ return '\u00a5' + roundUnit(n,headUnit()).toLocaleString('ja-JP'); }  // \u898b\u51fa\u3057\u91d1\u984d\uff08\u5165\u672d\u984d/\u4ed5\u5165\u5024\u30fb\u8ca9\u58f2\u984d\u30fb\u4e0a\u9650\u5165\u672d\u984d\uff09\n  function row(label,val,p,cls){\n    return '<div class=\"bd-row '+(cls||'')+'\"><span class=\"bd-label\">'+label+'<\/span>'+\n      '<span class=\"bd-right\"><span class=\"bd-val\">'+val+'<\/span><span class=\"bd-pct\">'+(p||'')+'<\/span><\/span><\/div>';\n  }\n  function setAmount(id,v){ var el=$(id); el.textContent=signYen(v); el.className='r-amount '+(v>=0?'pos':'neg'); }\n\n  /* ---------------- \u8a08\u7b97\uff08\u30e2\u30fc\u30c9\u5225\uff09 ---------------- */\n  function compute(bidVal){\n    var m=MODES[mode];\n    var key=$('supplier').value;\n    var pc=purchaseCost(key,bidVal);\n    var fee=pc.fee, purchaseInclTax=pc.incl;\n\n    // \u8ca9\u58f2\u984d(\u5186)\n    var priceJpy, priceInput=num('price');\n    if(m.cur==='JPY'){ priceJpy=priceInput; } else { priceJpy=priceInput*rate; }\n\n    var res={fee:fee,purchaseInclTax:purchaseInclTax,priceJpy:priceJpy,lines:[]};\n\n    if(mode==='ebay'){\n      var shipRev=num('shipBuyer')*rate, shipCost=num('shipCost');\n      var fvf=priceJpy*(num('fvf')/100), adfee=priceJpy*(num('adfee')/100);\n      var intl=priceJpy*0.015, net=priceJpy-fvf-adfee-intl, fx=net*0.02;\n      var refund=purchaseInclTax*(10/110)+(fvf+adfee+intl)*0.10;\n      var profitNo=priceJpy+shipRev-fvf-adfee-intl-fx-purchaseInclTax-shipCost;\n      res.shipRev=shipRev; res.shipCost=shipCost; res.fvf=fvf; res.adfee=adfee; res.intl=intl; res.fx=fx;\n      res.refund=refund; res.profitNo=profitNo; res.profitYes=profitNo+refund;\n    }\n    else if(mode==='catawiki'){\n      var shipRevC=num('shipBuyer')*rate, shipCostC=num('shipCost');\n      var feeC=priceJpy*0.125;\n      var refundC=purchaseInclTax*(10/110)+feeC*0.10;\n      var profitNoC=priceJpy+shipRevC-feeC-purchaseInclTax-shipCostC;\n      res.shipRev=shipRevC; res.shipCost=shipCostC; res.fvf=feeC;\n      res.refund=refundC; res.profitNo=profitNoC; res.profitYes=profitNoC+refundC;\n    }\n    else if(mode==='retail'){\n      var rfee=priceJpy*(num('retailFvf')/100), rship=num('retailShip');\n      var profitR=priceJpy-rfee-rship-purchaseInclTax;\n      res.rfee=rfee; res.rship=rship; res.profitNo=profitR; res.profitYes=profitR; res.refund=0;\n    }\n    else if(mode==='wholesale'){\n      var sc=sellCost($('seller').value,priceJpy);\n      var sellTotal=sc?sc.total:0;\n      var profitW=priceJpy-sellTotal-purchaseInclTax;\n      res.sc=sc; res.sellTotal=sellTotal; res.profitNo=profitW; res.profitYes=profitW; res.refund=0;\n    }\n    return res;\n  }\n  function profitNoAt(bidVal){ return compute(bidVal).profitNo; }\n\n  function maxBidForProfit(threshold){\n    var m=MODES[mode];\n    var priceJpy = (m.cur==='JPY') ? num('price') : num('price')*rate;\n    if(!$('supplier').value || priceJpy<=0) return null;\n    if(mode==='wholesale' && !$('seller').value) return null;\n    if(profitNoAt(0) < threshold) return 0;\n    var lo=0, hi=priceJpy*2+500000, g=0;\n    while(g<12 && profitNoAt(hi)>=threshold){ hi*=2; g++; }\n    for(var i=0;i<46;i++){ var mid=(lo+hi)/2; if(profitNoAt(mid)>=threshold) lo=mid; else hi=mid; }\n    return Math.floor(lo);\n  }\n\n  /* ---------------- render ---------------- */\n  function render(){\n    var m=MODES[mode];\n    var key=$('supplier').value, rule=supplierRules[key]||null;\n    $('feeHint').textContent = rule ? rule.hint : '\u4ed5\u5165\u5148\u3092\u9078\u3076\u3068\u624b\u6570\u6599\u30eb\u30fc\u30eb\u304c\u8868\u793a\u3055\u308c\u307e\u3059\u3002';\n\n    if(mode==='wholesale'){\n      var sk=$('seller').value, sr=sellerRules[sk]||null;\n      $('sellerHint').textContent = sr ? sr.hint+'\uff08\u7a0e\u629c\u2192\u7a0e\u8fbc\u3067\u53cd\u6620\uff09' : '\u8ca9\u58f2\u5148\u3092\u9078\u3076\u3068\u8ca9\u58f2\u624b\u6570\u6599\u304c\u8868\u793a\u3055\u308c\u307e\u3059\uff08\u7a0e\u629c\u2192\u7a0e\u8fbc\u3067\u53cd\u6620\uff09\u3002';\n    }\n\n    var bid=num('bid');\n    var c=compute(bid);\n    var priceJpy=c.priceJpy;\n    var targetYen=num('target');\n\n    $('feeOut').textContent=yenExact(c.fee);\n    $('costOut').textContent=yenHead(c.purchaseInclTax);\n\n    if(m.cur==='JPY'){\n      $('priceJpy').textContent = priceJpy>0 ? ('\u8ca9\u58f2\u984d '+yenHead(priceJpy)) : '\u8ca9\u58f2\u984d \u2014';\n    } else {\n      $('priceJpy').textContent = num('price')>0 ? ('\u5186\u63db\u7b97 '+yenHead(priceJpy)+(c.shipRev?('\uff08\u9001\u6599\u53ce\u5165 '+yenExact(c.shipRev)+'\uff09'):'')) : '\u5186\u63db\u7b97 \u2014';\n    }\n    var pv=num('price'); $('priceWarn').hidden=!(mode==='ebay' && pv>0 && pv<500);\n\n    // \u5224\u5b9a\n    var ceiling=maxBidForProfit(targetYen);\n    var breakeven=maxBidForProfit(0);\n    if(ceiling===null){\n      $('maxBid').textContent='\u2014';\n      $('maxBidCap').innerHTML = (mode==='wholesale')?'\u4ed5\u5165\u5148\u30fb\u8ca9\u58f2\u5148\u30fb\u8ca9\u58f2\u984d\u3092<br>\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044':'\u4ed5\u5165\u5148\u3068\u8ca9\u58f2\u4fa1\u683c\u3092<br>\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044';\n      $('breakEven').textContent='\u2014'; $('targetProfit').textContent='\u2014';\n    }else{\n      $('maxBid').textContent=yenHead(ceiling);\n      $('maxBidCap').innerHTML='\u7c97\u5229<br>'+yenExact(targetYen)+'\u4ee5\u4e0a';\n      $('breakEven').textContent=yenExact(breakeven);\n      $('targetProfit').textContent=yenExact(targetYen);\n    }\n\n    // verdict\n    var v=$('verdict'),vIcon=$('vIcon'),vMain=$('vMain'),vSub=$('vSub');\n    var yesLabel = m.rebate ? '\u9084\u4ed8\u8fbc\u5229\u76ca ' : '\u5229\u76ca ';\n    if(ceiling===null || bid<=0){\n      v.className='verdict v-none'; vIcon.textContent='\u25fb';\n      vMain.textContent = ceiling===null ? '\u5fc5\u8981\u9805\u76ee\u3092\u5165\u529b' : '\u5165\u672d\u984d/\u4ed5\u5165\u5024\u3092\u5165\u529b\u3059\u308b\u3068\u5224\u5b9a\u3057\u307e\u3059';\n      vSub.innerHTML='';\n    }else if(bid<=ceiling){\n      v.className='verdict v-go'; vIcon.textContent='\ud83d\udfe2';\n      vMain.textContent='\u4ed5\u5165\u5bfe\u8c61\u5546\u54c1';\n      vSub.innerHTML='\u3042\u3068 '+yenExact(ceiling-bid)+' \u307e\u3067\u5165\u672d\u4f59\u5730<br>'+yesLabel+signYen(c.profitYes);\n    }else if(bid<=breakeven){\n      v.className='verdict v-mid'; vIcon.textContent='\ud83d\udfe1';\n      vMain.textContent='\u8584\u5229\uff08\u76ee\u6a19\u7c97\u5229\u306b\u672a\u9054\uff09';\n      vSub.innerHTML='\u76ee\u6a19\u7c97\u5229\u307e\u3067 '+yenExact(targetYen-c.profitNo)+' \u4e0d\u8db3<br>\u7c97\u5229 '+signYen(c.profitNo);\n    }else{\n      v.className='verdict v-no'; vIcon.textContent='\ud83d\udd34';\n      vMain.textContent='\u898b\u9001\u308a\uff08\u3053\u306e\u307e\u307e\u3060\u3068\u8d64\u5b57\uff09';\n      vSub.innerHTML='\u640d\u76ca\u5206\u5c90\u306f '+yenExact(breakeven)+'<br>\u7c97\u5229 '+signYen(c.profitNo);\n    }\n\n    // results\n    setAmount('profitNo',c.profitNo);\n    $('marginNo').textContent = priceJpy>0?pct(c.profitNo/priceJpy):'\u2014';\n    $('marginNo').className='r-sub '+(c.profitNo>=0?'pos':'neg');\n    if(m.rebate){\n      $('profitYesRow').hidden=false;\n      setAmount('profitYes',c.profitYes);\n      $('marginYes').textContent = priceJpy>0?pct(c.profitYes/priceJpy):'\u2014';\n      $('marginYes').className='r-sub '+(c.profitYes>=0?'pos':'neg');\n      $('profitNoTitle').textContent='\u5229\u76ca\uff08\u9084\u4ed8\u7121\uff09';\n    }else{\n      $('profitYesRow').hidden=true;\n      $('profitNoTitle').textContent='\u7c97\u5229';\n    }\n\n    // breakdown\n    var base=priceJpy, rows=[];\n    rows.push(row(m.cur==='JPY'?'\u8ca9\u58f2\u984d\uff08\u5186\uff09':'\u4e88\u5b9a\u8ca9\u58f2\u4fa1\u683c\uff08\u5186\uff09', yenExact(priceJpy), '', ''));\n    if(mode==='ebay'){\n      rows.push(row('\u9001\u6599\u53ce\u5165\uff08\u30d0\u30a4\u30e4\u30fc '+m.sym+(Math.round(num('shipBuyer')*100)/100)+'\uff09','\uff0b'+yenExact(c.shipRev),base>0?pct(c.shipRev/base):'',''));\n      rows.push(row('\u6210\u7d04\u624b\u6570\u6599\uff08'+num('fvf')+'%\uff09','\uff0d'+yenExact(c.fvf),base>0?pct(c.fvf/base):'',''));\n      rows.push(row('\u5e83\u544a\u8cbb\uff08'+num('adfee')+'%\uff09','\uff0d'+yenExact(c.adfee),base>0?pct(c.adfee/base):'',''));\n      rows.push(row('\u6d77\u5916\u6c7a\u6e08\u624b\u6570\u6599\uff081.5%\uff09','\uff0d'+yenExact(c.intl),base>0?pct(c.intl/base):'',''));\n      rows.push(row('\u70ba\u66ff\u624b\u6570\u6599\uff082%\uff09','\uff0d'+yenExact(c.fx),base>0?pct(c.fx/base):'',''));\n    }else if(mode==='catawiki'){\n      rows.push(row('\u9001\u6599\u53ce\u5165\uff08\u30d0\u30a4\u30e4\u30fc '+m.sym+(Math.round(num('shipBuyer')*100)/100)+'\uff09','\uff0b'+yenExact(c.shipRev),base>0?pct(c.shipRev/base):'',''));\n      rows.push(row('\u6210\u7d04\u624b\u6570\u6599\uff0812.5%\uff09','\uff0d'+yenExact(c.fvf),base>0?pct(c.fvf/base):'',''));\n    }else if(mode==='retail'){\n      rows.push(row('\u8ca9\u58f2\u624b\u6570\u6599\uff08'+num('retailFvf')+'%\uff09','\uff0d'+yenExact(c.rfee),base>0?pct(c.rfee/base):'',''));\n      rows.push(row('\u9001\u6599','\uff0d'+yenExact(c.rship),base>0?pct(c.rship/base):'',''));\n    }else if(mode==='wholesale'){\n      if(c.sc){\n        rows.push(row('\u8ca9\u58f2\u624b\u6570\u6599\uff08\u7a0e\u8fbc\u30fb'+c.sc.rule.label+'\uff09','\uff0d'+yenExact(c.sc.feeIncl),base>0?pct(c.sc.feeIncl/base):'',''));\n        if(c.sc.photoIncl>0) rows.push(row((c.sc.rule.photoLabel||'\u64ae\u5f71\uff0f\u4e8b\u52d9\u624b\u6570\u6599')+'\uff08\u7a0e\u8fbc\uff09','\uff0d'+yenExact(c.sc.photoIncl),base>0?pct(c.sc.photoIncl/base):'',''));\n      }else{\n        rows.push(row('\u8ca9\u58f2\u624b\u6570\u6599','\u8ca9\u58f2\u5148\u3092\u9078\u629e','',''));\n      }\n    }\n    if(c.fee>0) rows.push(row('\u4ed5\u5165\u5148\u624b\u6570\u6599'+(rule?'\uff08'+supplierShort[key]+'\uff09':''),'\uff08'+yenExact(c.fee)+'\uff09','','sub'));\n    if(rule && rule.part) rows.push(row('\u2514 \u3046\u3061\u53c2\u52a0\u8cbb\uff08\u7a0e\u8fbc\uff09','\uff08'+yenExact(rule.part(num('bid')))+'\uff09','','sub'));\n    rows.push(row(key==='other'?'\u4ed5\u5165\u5024\uff08\u5165\u529b\u984d\uff09':'\u5165\u672d\u984d\uff0b\u624b\u6570\u6599\uff08\u7a0e\u8fbc\uff09','\uff0d'+yenExact(c.purchaseInclTax),base>0?pct(c.purchaseInclTax/base):'',''));\n    if(mode==='ebay' && num('shipCost')>0) rows.push(row('\u9001\u6599 \u5b9f\u8cbb','\uff0d'+yenExact(num('shipCost')),base>0?pct(num('shipCost')/base):'',''));\n    rows.push(row(m.rebate?'\u5229\u76ca\uff08\u9084\u4ed8\u7121\uff09':'\u7c97\u5229',signYen(c.profitNo),'','total'));\n    if(m.rebate){\n      rows.push(row('\u6d88\u8cbb\u7a0e\u9084\u4ed8','\uff0b'+yenExact(c.refund),base>0?pct(c.refund/base):'',''));\n      rows.push(row('\u5229\u76ca\uff08\u9084\u4ed8\u6709\uff09',signYen(c.profitYes),'','total'));\n    }\n    $('bdRows').innerHTML=rows.join('');\n  }\n\n  /* ---------------- \u30e2\u30fc\u30c9\u5207\u66ff ---------------- */\n  var NOTES={\n    ebay:'\u203b \u672c\u30c4\u30fc\u30eb\u306f\u8ca9\u58f2\u4fa1\u683c $500\u4ee5\u4e0a\u3067\u306e\u4ed5\u5165\u5224\u65ad\u7528\u3067\u3059\uff08$500\u672a\u6e80\u306f\u4ed5\u5165\u308c\u306a\u3044\u524d\u63d0\u30fb\u95a2\u7a0e0\uff09<br>\u203b \u6210\u7d04\u624b\u6570\u6599\uff0813%\uff0f18%\u30fb\u65e2\u5b9a18%\uff09\uff0f\u5e83\u544a\u8cbb\uff08\u65e2\u5b9a3%\uff09\uff0f\u6d77\u5916\u6c7a\u6e081.5%\uff0f\u70ba\u66ff2%<br>\u203b \u4ed5\u5165\u5024\uff1d\uff08\u5165\u672d\u984d\uff0b\u4ed5\u5165\u5148\u624b\u6570\u6599\uff09\u00d71.10\uff08JDS\u30fb\u305d\u306e\u4ed6\u306f\u5185\u7a0e\uff09<br>\u203b \u6d88\u8cbb\u7a0e\u9084\u4ed8\uff1d\u4ed5\u5165\u5024\u00d710/110 \uff0b\uff08\u6210\u7d04\uff0b\u5e83\u544a\uff0b\u6d77\u5916\u6c7a\u6e08\uff09\u00d710%<br>\u203b \u4e0a\u9650\u5165\u672d\u984d\uff1d\u9084\u4ed8\u7121\u306e\u7c97\u5229\u304c\u76ee\u6a19\u7c97\u5229\u4ee5\u4e0a\u306b\u306a\u308b\u6700\u5927\u5165\u672d\u984d',\n    catawiki:'\u203b \u30e6\u30fc\u30ed\u5efa\u3066\u3002\u6210\u7d04\u624b\u6570\u6599\u4e00\u5f8b12.5%\u30fb\u9001\u6599\u20ac27\u30d0\u30a4\u30e4\u30fc\u8ca0\u62c5\uff08\u53ef\u5909\uff09<br>\u203b \u4ed5\u5165\u5024\uff1d\uff08\u5165\u672d\u984d\uff0b\u4ed5\u5165\u5148\u624b\u6570\u6599\uff09\u00d71.10\uff08JDS\u30fb\u305d\u306e\u4ed6\u306f\u5185\u7a0e\uff09<br>\u203b \u6d88\u8cbb\u7a0e\u9084\u4ed8\uff1d\u4ed5\u5165\u5024\u00d710/110 \uff0b \u6210\u7d04\u624b\u6570\u6599\u00d710%<br>\u203b \u4e0a\u9650\u5165\u672d\u984d\uff1d\u9084\u4ed8\u7121\u306e\u7c97\u5229\u304c\u76ee\u6a19\u7c97\u5229\u4ee5\u4e0a\u306b\u306a\u308b\u6700\u5927\u5165\u672d\u984d',\n    retail:'\u203b \u56fd\u5185\u5c0f\u58f2\u308a\u3002\u8ca9\u58f2\u624b\u6570\u6599\uff08\u65e2\u5b9a10%\u30fb\u5909\u66f4\u53ef\uff09\uff0b\u9001\u6599\uff08\u65e2\u5b9a800\u5186\u30fb\u5909\u66f4\u53ef\uff09\u306e\u307f\u3002\u305d\u306e\u4ed6\u624b\u6570\u6599\u30fb\u9084\u4ed8\u30fb\u70ba\u66ff\u306a\u3057<br>\u203b \u4ed5\u5165\u5024\uff1d\uff08\u5165\u672d\u984d\uff0b\u4ed5\u5165\u5148\u624b\u6570\u6599\uff09\u00d71.10\uff08JDS\u30fb\u305d\u306e\u4ed6\u306f\u5185\u7a0e\uff09<br>\u203b \u4e0a\u9650\u4ed5\u5165\u984d\uff1d\u7c97\u5229\u304c\u76ee\u6a19\u7c97\u5229\uff085,000\u5186\uff09\u4ee5\u4e0a\u306b\u306a\u308b\u6700\u5927\u4ed5\u5165\u984d',\n    wholesale:'\u203b \u696d\u8005\u9593\u8ca9\u58f2\u3002\u8ca9\u58f2\u624b\u6570\u6599\u306f\u8ca9\u58f2\u5148\u5225\uff08\u7a0e\u629c\u5165\u529b\u2192\u7a0e\u8fbc\u00d71.10\u3067\u53cd\u6620\uff0fJDS\u306f\u5185\u7a0e\uff09\u3002\u9001\u6599\u306a\u3057\u30fb\u9084\u4ed8\u306a\u3057<br>\u203b \u4ed5\u5165\u5024\uff1d\uff08\u5165\u672d\u984d\uff0b\u4ed5\u5165\u5148\u624b\u6570\u6599\uff09\u00d71.10\uff08JDS\u30fb\u305d\u306e\u4ed6\u306f\u5185\u7a0e\uff0f\u30b3\u30e1\u5175\u30a2\u30d1\u30ec\u30eb\u306f\u91d1\u984d\u522515/10/5%\uff09<br>\u203b \u4e0a\u9650\u4ed5\u5165\u984d\uff1d\u7c97\u5229\u304c\u76ee\u6a19\u7c97\u5229\uff085,000\u5186\uff09\u4ee5\u4e0a\u306b\u306a\u308b\u6700\u5927\u4ed5\u5165\u984d'\n  };\n  function setMode(mkey){\n    if(mode) stashState(mode);   // \u76f4\u524d\u306e\u8ca9\u8def\u306e\u5165\u529b\u5024\u3092\u9000\u907f\uff08\u540c\u3058\u30bf\u30d6\u3092\u62bc\u3057\u76f4\u3057\u3066\u3082\u6d88\u3048\u306a\u3044\uff09\n    mode=mkey; var m=MODES[mkey];\n    document.body.setAttribute('data-mode',mkey);\n    Array.prototype.forEach.call(document.querySelectorAll('.mode-btn'),function(b){ b.classList.toggle('active', b.getAttribute('data-m')===mkey); });\n    $('eyebrow').textContent=m.eyebrow;\n    $('modeDesc').innerHTML=m.desc;\n    $('lockLabel').textContent=({ebay:'eBay',catawiki:'Catawiki',retail:'\u5c0f\u58f2',wholesale:'\u696d\u8ca9'})[mkey]||'';\n    $('note').innerHTML=NOTES[mkey];\n\n    // FX bar\n    $('fxBar').hidden=!m.fx;\n    if(m.fx){ $('fxUnit').innerHTML='1 '+m.sym+'&nbsp;=&nbsp;\u00a5'; }\n\n    // \u8ca9\u58f2\u5148\n    $('sellerField').hidden=!m.seller;\n\n    // \u8ca9\u58f2\u4fa1\u683c\u30e9\u30d9\u30eb/\u5358\u4f4d\n    if(m.cur==='JPY'){\n      $('priceLbl').textContent='\u8ca9\u58f2\u984d\uff08\u5186\uff09';\n      $('priceUnit').textContent='\u5186'; $('priceWrap').classList.remove('lead');\n    }else{\n      $('priceLbl').textContent='\u4e88\u5b9a\u8ca9\u58f2\u4fa1\u683c\uff08'+(m.cur==='USD'?'\u30c9\u30eb\u30fb$500\u4ee5\u4e0a':'\u30e6\u30fc\u30ed')+'\uff09';\n      $('priceUnit').textContent=m.sym; $('priceWrap').classList.add('lead');\n    }\n\n    // \u5165\u672d\u30e9\u30d9\u30eb\n    $('bidLbl').textContent = (mkey==='wholesale')?'\u4ed5\u5165\u984d\uff08\u843d\u672d\u30fb\u5186\uff09':'\u5165\u672d\u984d/\u4ed5\u5165\u5024(\u5186)';\n\n    // \u76ee\u6a19\u7c97\u5229\u30e9\u30d9\u30eb\n    $('targetLbl').textContent = m.rebate?'\u76ee\u6a19\u7c97\u5229\uff08\u9084\u4ed8\u7121\u30fb\u5186\uff09':'\u76ee\u6a19\u7c97\u5229\uff08\u5186\uff09';\n\n    // \u624b\u6570\u6599\u30d1\u30cd\u30eb\u8868\u793a\n    $('ebayFees').hidden = !(mkey==='ebay');\n    $('retailFees').hidden = !(mkey==='retail');\n    // Catawiki/\u696d\u8ca9\u306f\u8ffd\u52a0\u624b\u6570\u6599\u30d1\u30cd\u30eb\u306a\u3057\n\n    // \u9001\u6599\u8a2d\u5b9a(eBay/Catawiki\u306e\u307f)\n    $('shipDisc').hidden = !(m.fx);\n    if(m.fx){ $('shipBuyerLbl').textContent='\u9001\u6599\uff08\u30d0\u30a4\u30e4\u30fc\u8ca0\u62c5\u30fb'+m.sym+'\uff09'; $('shipBuyerUnit').textContent=m.sym; }\n    // Catawiki\u65e2\u5b9a\u9001\u6599\u20ac27\n    // \u9001\u6599\u306f\u30bf\u30d6\u3054\u3068\u306b\u4fdd\u6301\uff08restoreState\u3067\u5fa9\u5143\u30fb\u521d\u56de\u306feBay $0\uff0fCatawiki \u20ac27\uff09\n\n    // FX\u53d6\u5f97\uff08\u4fdd\u5b58\u30ec\u30fc\u30c8\u2192\u5373\u8868\u793a\u2192\u81ea\u52d5\u53d6\u5f97\u3067\u4e0a\u66f8\u304d\uff09\n    var _fx=(modeState[mkey]||{})._fx;\n    if(m.fx && _fx){\n      // \u4e00\u5ea6\u958b\u3044\u305f\u8ca9\u8def\u306b\u623b\u3063\u305f\u6642\u306f\u3001\u96e2\u308c\u305f\u6642\u306e\u30ec\u30fc\u30c8\u306e\u307e\u307e\uff08\u518d\u53d6\u5f97\u3057\u306a\u3044\uff1d\u6570\u5024\u304c\u5909\u308f\u3089\u306a\u3044\uff09\n      rateManual=_fx.manual; rate=_fx.rate; $('rateInput').value=_fx.input; $('fxDisplay').textContent=_fx.disp; $('fxMeta').textContent=_fx.meta;\n    }else if(m.fx){\n      rateManual=false;\n      var start=loadRate(m.cur)||FALLBACK[m.cur];\n      rate=start; $('rateInput').value=start.toFixed(2); $('fxDisplay').textContent=start.toFixed(2);\n      $('fxMeta').textContent=loadRate(m.cur)?'\u524d\u56de\u306e\u30ec\u30fc\u30c8\uff08\u518d\u53d6\u5f97\u3067\u66f4\u65b0\uff09':'\u30ec\u30fc\u30c8\u53d6\u5f97\u4e2d\u2026';\n      fetchRate();\n    }\n    restoreState(mkey);                                        // \u3053\u306e\u8ca9\u8def\u306e\u5165\u529b\u5024\u3092\u5fa9\u5143\uff08\u7121\u3051\u308c\u3070\u7a7a\uff1d\u72ec\u7acb\uff09\n    render();\n  }\n\n  /* ---------------- persistence ---------------- */\n  function loadPrefs(){\n    try{\n      var g=function(k){return localStorage.getItem(k);};\n      if(g('t_fvf')==='13'||g('t_fvf')==='18') $('fvf').value=g('t_fvf');   // \u65e714%\u7b49\u306e\u4fdd\u5b58\u5024\u306f\u7121\u8996\u3057\u3066\u65e2\u5b9a18%\n      if(g('t_adfee')!=null) $('adfee').value=g('t_adfee');\n      if(g('t_retailFvf')!=null) $('retailFvf').value=g('t_retailFvf');\n      if(g('t_retailShip')!=null) $('retailShip').value=g('t_retailShip');\n    }catch(e){}\n  }\n  function savePrefs(){\n    try{\n      localStorage.setItem('t_fvf',$('fvf').value);\n      localStorage.setItem('t_adfee',$('adfee').value);\n      localStorage.setItem('t_retailFvf',$('retailFvf').value);\n      localStorage.setItem('t_retailShip',$('retailShip').value);\n    }catch(e){}\n  }\n\n  /* ---------------- events ---------------- */\n  Array.prototype.forEach.call(document.querySelectorAll('.mode-btn'),function(b){\n    b.addEventListener('click',function(){ setMode(b.getAttribute('data-m')); });\n  });\n  ['supplier','seller','bid','price','target','fvf','adfee','retailFvf','retailShip','shipBuyer','shipCost'].forEach(function(id){\n    var el=$(id); if(!el) return;\n    el.addEventListener('input',function(e){\n      if(id==='shipBuyer') $('shipBuyer').dataset.touched='1';\n      render();\n      if(id==='fvf'||id==='adfee'||id==='retailFvf'||id==='retailShip') savePrefs();\n    });\n    el.addEventListener('change',function(){ render(); if(id==='supplier'||id==='seller') saveSel(); });\n    if(id==='supplier'||id==='seller') el.addEventListener('input',saveSel);\n  });\n  // \u6570\u5024\u6b04\uff1a\u30de\u30a6\u30b9\u30db\u30a4\u30fc\u30eb\u3067\u5024\u304c\u5897\u6e1b\u3057\u306a\u3044\u3088\u3046\u306b\u3059\u308b\uff08\u30da\u30fc\u30b8\u306f\u305d\u306e\u307e\u307e\u30b9\u30af\u30ed\u30fc\u30eb\uff09\n  Array.prototype.forEach.call(document.querySelectorAll('input[type=number]'),function(el){\n    el.addEventListener('wheel',function(){ if(document.activeElement===el) el.blur(); },{passive:true});\n  });\n  $('rateInput').addEventListener('input',function(){\n    var v=parseFloat($('rateInput').value);\n    if(!isNaN(v)&&v>0){ rateManual=true; rate=v; saveRate(curOf(), Math.round(v*100)/100); $('fxDisplay').textContent=(Math.round(v*100)/100).toFixed(2); $('fxMeta').textContent='\u624b\u5165\u529b\u30ec\u30fc\u30c8\uff08\u4fdd\u5b58\u3057\u307e\u3057\u305f\uff09'; render(); }\n  });\n  $('refreshBtn').addEventListener('click',function(){ rateManual=false; fetchRate(); });\n\n  // init\uff08\u56fa\u5b9a\u30e2\u30fc\u30c9\uff1a\u30d3\u30eb\u30c9\u6642\u30c8\u30fc\u30af\u30f3\u3001\u307e\u305f\u306f URL\u30cf\u30c3\u30b7\u30e5 #ebay \u7b49\u3002\u3042\u308c\u3070\u30bf\u30d6\u3092\u96a0\u3059\uff09\n  loadPrefs();\n  var LOCK='@@MODE@@'; if(LOCK.charAt(0)==='@') LOCK='';\n  try{ var _h=(location.hash||location.search||''); var _mm=_h.match(/(ebay|catawiki|retail|wholesale)/); if(_mm) LOCK=_mm[1]; }catch(e){}\n  if(LOCK){ document.body.classList.add('locked'); var _mb=document.querySelector('.modes'); if(_mb) _mb.style.display='none'; }\n  setMode(LOCK||'ebay');\n})();\n<\/script>\n<\/body>\n<\/html>\n";
+  var built=false;
+  function build(){
+    if(built) return; built=true;
+    var grid=document.getElementById('allGrid');
+    ['ebay','catawiki','retail','wholesale'].forEach(function(m){
+      var f=document.createElement('iframe'); f.title=m;
+      f.srcdoc=SELF_SRC.split('@@MODE@@').join(m);
+      grid.appendChild(f);
+    });
+  }
+  function enterAll(){ build(); document.body.classList.add('allmode');
+    Array.prototype.forEach.call(document.querySelectorAll('.mode-btn'),function(b){b.classList.remove('active');}); }
+  function exitAll(){ document.body.classList.remove('allmode');
+    var cur=document.body.getAttribute('data-mode'); var b=document.querySelector('.mode-btn[data-m=\"'+cur+'\"]'); if(b)b.classList.add('active'); }
+  var _inExt=!!(window.chrome&&chrome.runtime&&chrome.runtime.id);
+  var _allBtn=document.getElementById('allBtn');
+  if(_inExt){
+    _allBtn.addEventListener('click',function(){
+      var u=(chrome.runtime.getURL?chrome.runtime.getURL('dashboard.html'):'dashboard.html');
+      if(chrome.tabs&&chrome.tabs.create){ chrome.tabs.create({url:u}); } else { window.open(u,'_blank'); }
+    });
+  } else {
+    _allBtn.addEventListener('click',enterAll);
+  }
+  document.getElementById('allBack').addEventListener('click',exitAll);
+  Array.prototype.forEach.call(document.querySelectorAll('.mode-btn'),function(b){ b.addEventListener('click',exitAll); });
+})();
+</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
+</body>
+</html>
